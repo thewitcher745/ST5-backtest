@@ -19,6 +19,7 @@ class PivotTupleType(NamedTuple):
     pivot_type: str
 
 
+
 class LegTupleType(NamedTuple):
     start_index: int
     end_index: int
@@ -27,6 +28,14 @@ class LegTupleType(NamedTuple):
     start_value: float
     end_value: float
     leg_type: str
+
+class PatternTupleType(NamedTuple):
+    start_index: int
+    end_index: int
+    type: str
+
+    def __repr__(self):
+        return f'{self.type.capitalize()}({self.start_index} - {self.end_index})'
 
 
 def create_candle_tuple(row: Union[pd.Series, CandleTupleType]) -> CandleTupleType:
@@ -52,3 +61,6 @@ def create_leg_tuple(pivot_1: PivotTupleType, pivot_2: PivotTupleType) -> LegTup
     leg_type = "bullish" if pivot_1.pivot_value < pivot_2.pivot_value else "bearish"
 
     return LegTupleType(pivot_1.pair_df_index, pivot_2.pair_df_index, pivot_1.time, pivot_2.time, pivot_1.pivot_value, pivot_2.pivot_value, leg_type)
+
+def create_pattern_tuple(start_index: int, end_index: int, type: str):
+    return PatternTupleType(start_index, end_index, type)

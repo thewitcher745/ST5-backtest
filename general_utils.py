@@ -2,6 +2,8 @@ from typing import Union, List, Tuple
 import pandas as pd
 import plotly.graph_objects as go
 
+from datatypes import PatternTupleType
+
 
 def load_local_data(hdf_path: str = './cached_data/XEMUSDT.hdf5') -> pd.DataFrame:
     # Use pandas to read the hdf5 file
@@ -11,7 +13,7 @@ def load_local_data(hdf_path: str = './cached_data/XEMUSDT.hdf5') -> pd.DataFram
 def plot_candlesticks_zigzag_range(df: pd.DataFrame,
                                    zigzag_df: pd.DataFrame = None,
                                    x_axis_type: str = 'time',
-                                   highlight_range: Union[List[Tuple]] = None,
+                                   highlight_range: Union[List[PatternTupleType], tuple] = None,
                                    directional_coloring: bool = True) -> None:
     """
         Function to plot candlestick chart with optional zigzag lines and highlighted ranges.
@@ -77,7 +79,7 @@ def plot_candlesticks_zigzag_range(df: pd.DataFrame,
                     # If enabled, the pattern_list has to have a length of 3, otherwise, throw an error
                     if len(highlight_range[i]) != 3:
                         raise ValueError('The highlight_range list has to be a list of tuples with 3 elements each')
-                    fill_color = 'LightGreen' if highlight_range[i][2] == 'bullish' else 'LightSalmon'
+                    fill_color = 'LightGreen' if highlight_range[i].type == 'bullish' else 'LightSalmon'
                 else:
                     # A list of colors to loop through and draw patterns from
                     # If the list is exhausted, it will loop back to the beginning
@@ -88,9 +90,9 @@ def plot_candlesticks_zigzag_range(df: pd.DataFrame,
                     type='rect',
                     xref='x',
                     yref='paper',
-                    x0=range_tuple[0],
+                    x0=range_tuple.start_index,
                     y0=0,
-                    x1=range_tuple[1],
+                    x1=range_tuple.end_index,
                     y1=1,
                     fillcolor=fill_color,
                     opacity=0.5,
