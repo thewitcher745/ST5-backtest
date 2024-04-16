@@ -62,5 +62,5 @@ def create_leg_tuple(pivot_1: PivotTupleType, pivot_2: PivotTupleType) -> LegTup
 
     return LegTupleType(pivot_1.pair_df_index, pivot_2.pair_df_index, pivot_1.time, pivot_2.time, pivot_1.pivot_value, pivot_2.pivot_value, leg_type)
 
-def create_pattern_tuple(start_index: int, end_index: int, type: str):
-    return PatternTupleType(start_index, end_index, type)
+def create_pattern_tuple(start_index: int, end_index: int, pattern_type: str):
+    return PatternTupleType(start_index, end_index, pattern_type)
