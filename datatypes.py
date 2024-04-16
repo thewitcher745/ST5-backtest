@@ -36,12 +36,16 @@ def create_candle_tuple(row: Union[pd.Series, CandleTupleType]) -> CandleTupleTy
         return CandleTupleType(row.Index, row.time, row.open, row.high, row.low, row.close)
 
 
-def create_pivot_tuple(pivot: tuple) -> PivotTupleType:
-    pivot_candle: CandleTupleType = pivot[0]
-    pivot_type: str = pivot[1]
-    pivot_value: float = pivot_candle.high if pivot_type == "peak" else pivot_candle.low
+def create_pivot_tuple(pivot: Union[tuple, pd.Series]) -> PivotTupleType:
+    if type(pivot) == tuple:
+        pivot_candle: CandleTupleType = pivot[0]
+        pivot_type: str = pivot[1]
+        pivot_value: float = pivot_candle.high if pivot_type == "peak" else pivot_candle.low
 
-    return PivotTupleType(pivot_candle.pair_df_index, pivot_candle.time, pivot_value, pivot_type)
+        return PivotTupleType(pivot_candle.pair_df_index, pivot_candle.time, pivot_value, pivot_type)
+
+    else:
+        return PivotTupleType(pivot.pair_df_index, pivot.time, pivot.pivot_value, pivot.pivot_type)
 
 
 def create_leg_tuple(pivot_1: PivotTupleType, pivot_2: PivotTupleType) -> LegTupleType:
