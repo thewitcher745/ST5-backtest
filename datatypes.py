@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 
 
-class CandleTupleType(NamedTuple):
+class Candle(NamedTuple):
     pair_df_index: int
     time: datetime
     open: float
@@ -11,15 +11,33 @@ class CandleTupleType(NamedTuple):
     low: float
     close: float
 
+    @staticmethod
+    def create(row: Union[pd.Series, NamedTuple]):
+        if type(row) == pd.Series:
+            return Candle(int(row.name), row.time, row.open, row.high, row.low, row.close)
+        else:
+            return Candle(row.Index, row.time, row.open, row.high, row.low, row.close)
 
-class PivotTupleType(NamedTuple):
+class Pivot(NamedTuple):
     pair_df_index: int
     time: datetime
     pivot_value: float
     pivot_type: str
 
+    @staticmethod
+    def create(pivot: Union[tuple, pd.Series]):
+        if type(pivot) == tuple:
+            pivot_candle: Candle = pivot[0]
+            pivot_type: str = pivot[1]
+            pivot_value: float = pivot_candle.high if pivot_type == "peak" else pivot_candle.low
 
-class LegTupleType(NamedTuple):
+            return Pivot(pivot_candle.pair_df_index, pivot_candle.time, pivot_value, pivot_type)
+
+        else:
+            return Pivot(pivot.pair_df_index, pivot.time, pivot.pivot_value, pivot.pivot_type)
+
+
+class Leg(NamedTuple):
     start_index: int
     end_index: int
     start_time: datetime
@@ -28,28 +46,22 @@ class LegTupleType(NamedTuple):
     end_value: float
     leg_type: str
 
+    @staticmethod
+    def create(pivot_1: Pivot, pivot_2: Pivot):
+        leg_type = "bullish" if pivot_1.pivot_value < pivot_2.pivot_value else "bearish"
 
-def create_candle_tuple(row: Union[pd.Series, CandleTupleType]) -> CandleTupleType:
-    if type(row) == pd.Series:
-        return CandleTupleType(int(row.name), row.time, row.open, row.high, row.low, row.close)
-    else:
-        return CandleTupleType(row.Index, row.time, row.open, row.high, row.low, row.close)
-
-
-def create_pivot_tuple(pivot: Union[tuple, pd.Series]) -> PivotTupleType:
-    if type(pivot) == tuple:
-        pivot_candle: CandleTupleType = pivot[0]
-        pivot_type: str = pivot[1]
-        pivot_value: float = pivot_candle.high if pivot_type == "peak" else pivot_candle.low
-
-        return PivotTupleType(pivot_candle.pair_df_index, pivot_candle.time, pivot_value, pivot_type)
-
-    else:
-        return PivotTupleType(pivot.pair_df_index, pivot.time, pivot.pivot_value, pivot.pivot_type)
+        return Leg(pivot_1.pair_df_index, pivot_2.pair_df_index, pivot_1.time, pivot_2.time, pivot_1.pivot_value, pivot_2.pivot_value,
+                            leg_type)
 
 
-def create_leg_tuple(pivot_1: PivotTupleType, pivot_2: PivotTupleType) -> LegTupleType:
-    leg_type = "bullish" if pivot_1.pivot_value < pivot_2.pivot_value else "bearish"
+class Trend(NamedTuple):
+    start_index: int
+    end_index: int
+    direction: str
 
-    return LegTupleType(pivot_1.pair_df_index, pivot_2.pair_df_index, pivot_1.time, pivot_2.time, pivot_1.pivot_value, pivot_2.pivot_value, leg_type)
+    def __repr__(self):
+        return f'{self.direction.capitalize()}({self.start_index} - {self.end_index})'
 
+    @staticmethod
+    def create(start_index: int, end_index: int, direction: str):
+        return Trend(start_index, end_index, direction)

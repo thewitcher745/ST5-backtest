@@ -26,8 +26,8 @@ def zigzag(pair_df: pd.DataFrame) -> pd.DataFrame:
     if last_pivot_candle_series.high > pair_df.iloc[last_pivot_candle_series.name - 1].high:
         last_pivot_type = 'peak'
 
-    last_pivot_candle: CandleTupleType = create_candle_tuple(last_pivot_candle_series)
-    pivots: List[PivotTupleType] = []
+    last_pivot_candle: Candle = Candle.create(last_pivot_candle_series)
+    pivots: List[Pivot] = []
 
     # Start at the candle right after the last (first) pivot
     for row in pair_df.iloc[last_pivot_candle.pair_df_index + 1:].itertuples():
@@ -42,27 +42,30 @@ def zigzag(pair_df: pd.DataFrame) -> pd.DataFrame:
         # Does the candle register both a higher high AND a lower low?
         if (reversal_from_valley_condition and valley_extension_condition) or (peak_extension_condition and reversal_from_peak_condition):
             # Add the last previous pivot to the list of pivots
-            pivots.append(create_pivot_tuple((last_pivot_candle, last_pivot_type)))
+            pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
 
             # Update the last pivot's type and value
-            last_pivot_candle = create_candle_tuple(row)
+            last_pivot_candle = Candle.create(row)
             last_pivot_type = 'valley' if last_pivot_type == 'peak' else 'peak'
 
         # Has a same direction pivot been found?
         if peak_extension_condition or valley_extension_condition:
             # Don't change the direction of the last pivot found, just update its value
-            last_pivot_candle = create_candle_tuple(row)
+            last_pivot_candle = Candle.create(row)
 
         # Has a pivot in the opposite direction been found?
         elif reversal_from_valley_condition or reversal_from_peak_condition:
             # Add the last previous pivot to the list of pivots
-            pivots.append(create_pivot_tuple((last_pivot_candle, last_pivot_type)))
+            pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
 
             # Update the last pivot's type and value
-            last_pivot_candle = create_candle_tuple(row)
+            last_pivot_candle = Candle.create(row)
             last_pivot_type = 'valley' if last_pivot_type == 'peak' else 'peak'
 
     # Convert the pivot list to zigzag_df
     zigzag_df = pd.DataFrame.from_dict(pivot._asdict() for pivot in pivots)
 
     return zigzag_df
+
+
+

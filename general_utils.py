@@ -2,8 +2,6 @@ from typing import Union, List, Tuple
 import pandas as pd
 import plotly.graph_objects as go
 
-from datatypes import PatternTupleType
-
 
 def load_local_data(hdf_path: str = './cached_data/XEMUSDT.hdf5') -> pd.DataFrame:
     # Use pandas to read the hdf5 file
@@ -13,7 +11,7 @@ def load_local_data(hdf_path: str = './cached_data/XEMUSDT.hdf5') -> pd.DataFram
 def plot_candlesticks_zigzag_range(df: pd.DataFrame,
                                    zigzag_df: pd.DataFrame = None,
                                    x_axis_type: str = 'time',
-                                   highlight_range: Union[List[PatternTupleType], tuple] = None,
+                                   # highlight_range: Union[List[PatternTupleType], tuple] = None,
                                    directional_coloring: bool = True) -> None:
     """
         Function to plot candlestick chart with optional zigzag lines and highlighted ranges.
@@ -56,49 +54,49 @@ def plot_candlesticks_zigzag_range(df: pd.DataFrame,
                                  line=dict(color='royalblue')))
 
     # Add a highlighted range if specified
-    if highlight_range is not None:
-        # If a single highlight range has been given, draw it
-        if type(highlight_range) == tuple:
-            fig.add_shape(
-                type='rect',
-                xref='x',
-                yref='paper',
-                x0=highlight_range[0],
-                y0=0,
-                x1=highlight_range[1],
-                y1=1,
-                fillcolor='LightSalmon',
-                opacity=0.5,
-                layer='below',
-                line_width=0,
-            )
-        elif type(highlight_range) == list:
-            for i, range_tuple in enumerate(highlight_range):
-                if directional_coloring:
-                    # If directional coloring is enabled, color the range based on the direction (Bearish or bullish)
-                    # If enabled, the pattern_list has to have a length of 3, otherwise, throw an error
-                    if len(highlight_range[i]) != 3:
-                        raise ValueError('The highlight_range list has to be a list of tuples with 3 elements each')
-                    fill_color = 'LightGreen' if highlight_range[i].type == 'bullish' else 'LightSalmon'
-                else:
-                    # A list of colors to loop through and draw patterns from
-                    # If the list is exhausted, it will loop back to the beginning
-                    color_list = ['LightSalmon', 'LightGreen', 'LightBlue', 'LightCoral', 'LightSkyBlue', 'LightPink']
-                    fill_color = color_list[i % len(color_list)]
-
-                fig.add_shape(
-                    type='rect',
-                    xref='x',
-                    yref='paper',
-                    x0=range_tuple.start_index,
-                    y0=0,
-                    x1=range_tuple.end_index,
-                    y1=1,
-                    fillcolor=fill_color,
-                    opacity=0.5,
-                    layer='below',
-                    line_width=0,
-                )
+    # if highlight_range is not None:
+    #     # If a single highlight range has been given, draw it
+    #     if type(highlight_range) == tuple:
+    #         fig.add_shape(
+    #             type='rect',
+    #             xref='x',
+    #             yref='paper',
+    #             x0=highlight_range[0],
+    #             y0=0,
+    #             x1=highlight_range[1],
+    #             y1=1,
+    #             fillcolor='LightSalmon',
+    #             opacity=0.5,
+    #             layer='below',
+    #             line_width=0,
+    #         )
+    #     elif type(highlight_range) == list:
+    #         for i, range_tuple in enumerate(highlight_range):
+    #             if directional_coloring:
+    #                 # If directional coloring is enabled, color the range based on the direction (Bearish or bullish)
+    #                 # If enabled, the pattern_list has to have a length of 3, otherwise, throw an error
+    #                 if len(highlight_range[i]) != 3:
+    #                     raise ValueError('The highlight_range list has to be a list of tuples with 3 elements each')
+    #                 fill_color = 'LightGreen' if highlight_range[i].type == 'bullish' else 'LightSalmon'
+    #             else:
+    #                 # A list of colors to loop through and draw patterns from
+    #                 # If the list is exhausted, it will loop back to the beginning
+    #                 color_list = ['LightSalmon', 'LightGreen', 'LightBlue', 'LightCoral', 'LightSkyBlue', 'LightPink']
+    #                 fill_color = color_list[i % len(color_list)]
+    #
+    #             fig.add_shape(
+    #                 type='rect',
+    #                 xref='x',
+    #                 yref='paper',
+    #                 x0=range_tuple.start_index,
+    #                 y0=0,
+    #                 x1=range_tuple.end_index,
+    #                 y1=1,
+    #                 fillcolor=fill_color,
+    #                 opacity=0.5,
+    #                 layer='below',
+    #                 line_width=0,
+    #             )
 
     fig.update_layout(title='Candlestick Chart with Peaks',
                       xaxis_title='Date',
