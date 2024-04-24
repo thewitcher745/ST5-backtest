@@ -37,12 +37,30 @@ def zigzag(pair_df: pd.DataFrame) -> pd.DataFrame:
 
         # Does the candle register both a higher high AND a lower low?
         if (reversal_from_valley_condition and valley_extension_condition) or (peak_extension_condition and reversal_from_peak_condition):
+
+            # INITIAL NAIVE IMPLEMENTATION
             # Add the last previous pivot to the list of pivots
-            pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
+            # pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
 
             # Update the last pivot's type and value
-            last_pivot_candle = Candle.create(row)
-            last_pivot_type = 'valley' if last_pivot_type == 'peak' else 'peak'
+            # last_pivot_candle = Candle.create(row)
+            # last_pivot_type = 'valley' if last_pivot_type == 'peak' else 'peak'
+
+            # JUDGING BASED ON CANDLE COLOR
+            # If the candle is green, that means the low value was probably hit before the high value
+            # If the candle is red, that means the high value was probably hit before the low value
+            # This means that if the candle is green, we can extend a valley, and if it's red, we can extend a peak
+            # Otherwise the direction must flip
+            if (row.candle_color == 'green' and last_pivot_type == 'valley') or (row.candle_color == 'red' and last_pivot_type == 'peak'):
+                last_pivot_candle = Candle.create(row)
+
+            else:
+                # Add the last previous pivot to the list of pivots
+                pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
+
+                # Update the last pivot's type and value
+                last_pivot_candle = Candle.create(row)
+                last_pivot_type = 'valley' if last_pivot_type == 'peak' else 'peak'
 
         # Has a same direction pivot been found?
         if peak_extension_condition or valley_extension_condition:
