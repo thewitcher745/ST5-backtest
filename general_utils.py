@@ -4,8 +4,10 @@ import plotly.graph_objects as go
 
 
 def load_local_data(hdf_path: str = './cached_data/XEMUSDT.hdf5') -> pd.DataFrame:
+    pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
+    pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
     # Use pandas to read the hdf5 file
-    return pd.DataFrame(pd.read_hdf(hdf_path))
+    return pair_df
 
 
 class PlottingTool:
