@@ -116,7 +116,7 @@ def find_ascending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> 
 
     # If the selected start_index isn't a valley, throw an error
     if zigzag_df[zigzag_df.pair_df_index == start_pair_df_index].iloc[0].pivot_type != 'valley':
-        raise ValueError("The start index must be a valley.")
+        raise ValueError('The start index must be a valley.')
 
     # The slice of the zigzag_df dataframe that needs to be searched
     search_window: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index >= start_pair_df_index]
@@ -146,7 +146,7 @@ def find_descending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) ->
 
     # If the selected start_index isn't a peak, throw an error
     if zigzag_df[zigzag_df.pair_df_index == start_pair_df_index].iloc[0].pivot_type != 'peak':
-        raise ValueError("The start index must be a peak.")
+        raise ValueError('The start index must be a peak.')
 
     # The slice of the zigzag_df dataframe that needs to be searched
     search_window: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index >= start_pair_df_index]

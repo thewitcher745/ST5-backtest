@@ -29,7 +29,7 @@ class Pivot(NamedTuple):
         if type(pivot) == tuple:
             pivot_candle: Candle = pivot[0]
             pivot_type: str = pivot[1]
-            pivot_value: float = pivot_candle.high if pivot_type == "peak" else pivot_candle.low
+            pivot_value: float = pivot_candle.high if pivot_type == 'peak' else pivot_candle.low
 
             return Pivot(pivot_candle.pair_df_index, pivot_candle.time, pivot_value, pivot_type)
 
@@ -48,7 +48,7 @@ class Leg(NamedTuple):
 
     @staticmethod
     def create(pivot_1: Pivot, pivot_2: Pivot):
-        leg_type = "bullish" if pivot_1.pivot_value < pivot_2.pivot_value else "bearish"
+        leg_type = 'bullish' if pivot_1.pivot_value < pivot_2.pivot_value else 'bearish'
 
         return Leg(pivot_1.pair_df_index, pivot_2.pair_df_index, pivot_1.time, pivot_2.time, pivot_1.pivot_value, pivot_2.pivot_value,
                             leg_type)
