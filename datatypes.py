@@ -54,14 +54,12 @@ class Leg(NamedTuple):
                             leg_type)
 
 
-class Trend(NamedTuple):
-    start_index: int
-    end_index: int
+class OneDChain(NamedTuple):
+    low_chain_length: int
+    high_chain_length: int
+    start_pair_df_index: int
     direction: str
 
-    def __repr__(self):
-        return f'{self.direction.capitalize()}({self.start_index} - {self.end_index})'
-
     @staticmethod
-    def create(start_index: int, end_index: int, direction: str):
-        return Trend(start_index, end_index, direction)
+    def create(low_chain_length: int, high_chain_length: int, start_pair_df_index: int, direction: str):
+        return OneDChain(low_chain_length, high_chain_length, start_pair_df_index, direction)
