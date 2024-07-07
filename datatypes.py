@@ -59,7 +59,8 @@ class OneDChain(NamedTuple):
     high_chain_length: int
     start_pair_df_index: int
     direction: str
+    is_simplifying: bool
 
     @staticmethod
-    def create(low_chain_length: int, high_chain_length: int, start_pair_df_index: int, direction: str):
-        return OneDChain(low_chain_length, high_chain_length, start_pair_df_index, direction)
+    def create(low_chain_length: int, high_chain_length: int, start_pair_df_index: int, direction: str, is_simplifying: bool):
+        return OneDChain(low_chain_length, high_chain_length, start_pair_df_index, direction, is_simplifying)

@@ -129,7 +129,7 @@ def find_ascending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> 
         start_pair_df_index (int): The index to start the search from.
 
         Returns:
-        Tuple[int, int]: The start and end indices of the chain.
+        OneDChain: The start and end indices of the chain, along with information on if the chain simplifies an LO zigzag
     """
 
     # If the selected start_index isn't a valley, throw an error
@@ -145,28 +145,16 @@ def find_ascending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> 
     higher_low_chain_length: int = find_longest_chain(search_window_valleys, 'ascending')
     higher_high_chain_length: int = find_longest_chain(search_window_peaks, 'ascending')
 
-    return OneDChain.create(higher_low_chain_length, higher_high_chain_length, start_pair_df_index, 'ascending')
+    # A variable which indicates if the OneDChain is actualy simplifying a set of legs, which is used to find BOS points
+    is_simplifying: bool = higher_low_chain_length > 0 and higher_high_chain_length > 0
+
+    return OneDChain.create(higher_low_chain_length, higher_high_chain_length, start_pair_df_index, 'ascending', is_simplifying)
 
 
 def find_descending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> OneDChain:
-    """
-        Function to find the longest chain of lower lows in a zigzag DataFrame.
-        It starts from a given index and goes forward, looking for peaks with descending pivot values.
-        It stops once it finds a higher high than the previous.
-
-        Parameters:
-        zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
-        start_pair_df_index (int): The index to start the search from.
-
-        Returns:
-        Tuple[int, int]: The start and end indices of the chain.
-    """
-
-    # If the selected start_index isn't a peak, throw an error
     if zigzag_df[zigzag_df.pair_df_index == start_pair_df_index].iloc[0].pivot_type != 'peak':
         raise ValueError('The start index must be a peak.')
 
-    # The slice of the zigzag_df dataframe that needs to be searched
     search_window: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index >= start_pair_df_index]
 
     search_window_peaks: pd.Series = search_window[search_window.pivot_type == 'peak'].pivot_value
@@ -175,11 +163,14 @@ def find_descending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) ->
     lower_low_chain_length: int = find_longest_chain(search_window_valleys, 'descending')
     lower_high_chain_length: int = find_longest_chain(search_window_peaks, 'descending')
 
-    return OneDChain.create(lower_low_chain_length, lower_high_chain_length, start_pair_df_index, 'descending')
+
+    is_simplifying: bool = lower_low_chain_length > 0 and lower_high_chain_length > 0
+
+    return OneDChain.create(lower_low_chain_length, lower_high_chain_length, start_pair_df_index, 'descending', is_simplifying)
 
 
 def simplify_chain(input_zigzag_df: pd.DataFrame,
-                   high_low_chains: OneDChain) -> tuple:
+                   high_low_chains: OneDChain) -> dict:
     """
         Function that takes a chain of higher low/higher highs (ascending), or lower low/lower highs (descending) and
         returns a dict object with instructions on forming a higher order zigzag with it.
@@ -189,7 +180,8 @@ def simplify_chain(input_zigzag_df: pd.DataFrame,
         high_low_chains (OneDChain): A OneDChain object containing the chain lengths and the direction.
 
         Returns:
-        tuple: A tuple object containing the pair_df_indices of the start and end of the chain
+        dict: A dict object containing the pair_df_indices of the start and end of the chain, as well as a bool representing if the chain has
+        simplified the lower order zigzag
     """
     zigzag_df = input_zigzag_df.copy()
 
@@ -210,7 +202,11 @@ def simplify_chain(input_zigzag_df: pd.DataFrame,
 
         chain_end_peak_pair_df_index = peaks_df.reset_index(drop=True).iloc[total_chain_end_index].pair_df_index
 
-        return chain_start_pair_df_index, chain_end_peak_pair_df_index
+        return {
+            "start_index": chain_start_pair_df_index,
+            "end_index": chain_end_peak_pair_df_index,
+            "is_simplifying": high_low_chains.is_simplifying
+        }
 
     elif high_low_chains.direction == 'descending':
         valleys_df: pd.DataFrame = zigzag_df[zigzag_df.pivot_type == 'valley']
@@ -218,7 +214,11 @@ def simplify_chain(input_zigzag_df: pd.DataFrame,
 
         chain_end_valley_pair_df_index = valleys_df.reset_index(drop=True).iloc[total_chain_end_index].pair_df_index
 
-        return chain_start_pair_df_index, chain_end_valley_pair_df_index
+        return {
+            "start_index": chain_start_pair_df_index,
+            "end_index": chain_end_valley_pair_df_index,
+            "is_simplifying": high_low_chains.is_simplifying
+        }
 
 
 def generate_h_o_zigzag(zigzag_df: pd.DataFrame) -> pd.DataFrame:
@@ -236,7 +236,8 @@ def generate_h_o_zigzag(zigzag_df: pd.DataFrame) -> pd.DataFrame:
     """
 
     # Initialize an empty list to store the chains
-    h_o_zigzag_indices = []
+    h_o_zigzag_indices: list[int] = []
+    pbos_indices: list[int] = []
 
     # Get the maximum and minimum pair_df_index in the DataFrame, used as the start and end to the while loop
     max_pair_df_index: int = zigzag_df.pair_df_index.max()
@@ -257,15 +258,17 @@ def generate_h_o_zigzag(zigzag_df: pd.DataFrame) -> pd.DataFrame:
         simplified_leg = simplify_chain(zigzag_df, chains)
         # Simplify the unidirectional chain and add it to the h_o_zigzag_indices. If the list is empty, also append the starting index of the leg
         if len(h_o_zigzag_indices) == 0:
-            h_o_zigzag_indices.append(simplified_leg[0])
+            h_o_zigzag_indices.append(simplified_leg["start_index"])
 
-        h_o_zigzag_indices.append(simplified_leg[1])
+        h_o_zigzag_indices.append(simplified_leg["end_index"])
+        if simplified_leg["is_simplifying"]:
+            pbos_indices.append(simplified_leg["end_index"])
+
 
         # Update the current pair_df_index to the end index ([1]) of the last chain ([-1])
-        current_pair_df_index = simplified_leg[1]
+        current_pair_df_index = simplified_leg["end_index"]
 
     # Convert the list of pair_df_indices to a pandas dataframe containing the values, types and times of the pivots
-    h_o_zigzag_df: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index.isin(h_o_zigzag_indices)]
-
+    h_o_zigzag_df: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index.isin(h_o_zigzag_indices)].copy()
+    h_o_zigzag_df.loc[:, "is_pbos"] = h_o_zigzag_df.pair_df_index.isin(pbos_indices)
     return h_o_zigzag_df
-
