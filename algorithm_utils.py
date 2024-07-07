@@ -274,7 +274,22 @@ def generate_h_o_zigzag(zigzag_df: pd.DataFrame) -> pd.DataFrame:
     return h_o_zigzag_df
 
 
-def is_pbos_confirmed(bos_value, bos_type, confirmation_check_window):
+def is_pbos_confirmed(bos_value, bos_type, confirmation_check_window) -> bool:
+    """
+    Function to check if a potential breakout or breakdown (PBOS) is confirmed.
+
+    A PBOS is confirmed if there are any candles in the confirmation check window that break through the PBOS value.
+    If the PBOS is a peak, a confirmation is a close price greater than the PBOS value.
+    If the PBOS is a valley, a confirmation is a close price less than the PBOS value.
+
+    Parameters:
+    bos_value (float): The value of the potential breakout or breakdown (PBOS).
+    bos_type (str): The type of the PBOS. Can be 'peak' or 'valley'.
+    confirmation_check_window (pd.DataFrame): The DataFrame containing the candlestick data to check for confirmation.
+
+    Returns:
+    bool: True if the PBOS is confirmed, False otherwise.
+    """
     if bos_type == "peak":
         breaking_candles = confirmation_check_window.loc[confirmation_check_window.close > bos_value]
     else:
@@ -285,7 +300,23 @@ def is_pbos_confirmed(bos_value, bos_type, confirmation_check_window):
     return False
 
 
-def find_confirmed_boss(pbos_df: pd.DataFrame, pair_df: pd.DataFrame):
+def find_confirmed_boss(pbos_df: pd.DataFrame, pair_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Function to find confirmed breakouts or breakdowns (BOS) from a DataFrame of potential BOS (PBOS).
+
+    A BOS is confirmed if there are any candles in the confirmation check window that break through the PBOS value.
+    The function iterates over the PBOS DataFrame and checks each PBOS for confirmation.
+    If a PBOS is confirmed, its index is added to a list of confirmed BOS indices.
+    Finally, a DataFrame of confirmed BOS is returned.
+
+    Parameters:
+    pbos_df (pd.DataFrame): The DataFrame containing the potential breakouts or breakdowns (PBOS).
+    pair_df (pd.DataFrame): The DataFrame containing the candlestick data to check for confirmation.
+
+    Returns:
+    pd.DataFrame: A DataFrame containing the confirmed breakouts or breakdowns (BOS).
+    """
+
     confirmed_bos_indices: list[int] = []
     for pbos_row in pbos_df.itertuples():
         confirmation_check_window = pair_df.iloc[pbos_row.pair_df_index + 1:]

@@ -107,7 +107,6 @@ class PlottingTool:
             else:
                 color = "purple"
 
-
         x_data = points_df.pair_df_index
         if self.x_axis_type == 'time':
             x_data = points_df.time
