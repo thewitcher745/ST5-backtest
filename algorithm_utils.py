@@ -1,3 +1,5 @@
+import pandas as pd
+
 from datatypes import *
 
 
@@ -39,7 +41,7 @@ def zigzag(pair_df: pd.DataFrame) -> pd.DataFrame:
         if (reversal_from_valley_condition and valley_extension_condition) or (peak_extension_condition and reversal_from_peak_condition):
 
             # INITIAL NAIVE IMPLEMENTATION
-            # Add the last previous pivot to the list of pivots
+            # Add the last previous pivot to the list
             # pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
 
             # Update the last pivot's type and value
@@ -145,7 +147,7 @@ def find_ascending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> 
     higher_low_chain_length: int = find_longest_chain(search_window_valleys, 'ascending')
     higher_high_chain_length: int = find_longest_chain(search_window_peaks, 'ascending')
 
-    # A variable which indicates if the OneDChain is actualy simplifying a set of legs, which is used to find BOS points
+    # A variable which indicates if the OneDChain is actually simplifying a set of legs, which is used to find BOS points
     is_simplifying: bool = higher_low_chain_length > 0 and higher_high_chain_length > 0
 
     return OneDChain.create(higher_low_chain_length, higher_high_chain_length, start_pair_df_index, 'ascending', is_simplifying)
@@ -162,7 +164,6 @@ def find_descending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) ->
 
     lower_low_chain_length: int = find_longest_chain(search_window_valleys, 'descending')
     lower_high_chain_length: int = find_longest_chain(search_window_peaks, 'descending')
-
 
     is_simplifying: bool = lower_low_chain_length > 0 and lower_high_chain_length > 0
 
@@ -264,7 +265,6 @@ def generate_h_o_zigzag(zigzag_df: pd.DataFrame) -> pd.DataFrame:
         if simplified_leg["is_simplifying"]:
             pbos_indices.append(simplified_leg["end_index"])
 
-
         # Update the current pair_df_index to the end index ([1]) of the last chain ([-1])
         current_pair_df_index = simplified_leg["end_index"]
 
@@ -272,3 +272,25 @@ def generate_h_o_zigzag(zigzag_df: pd.DataFrame) -> pd.DataFrame:
     h_o_zigzag_df: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index.isin(h_o_zigzag_indices)].copy()
     h_o_zigzag_df.loc[:, "is_pbos"] = h_o_zigzag_df.pair_df_index.isin(pbos_indices)
     return h_o_zigzag_df
+
+
+def is_pbos_confirmed(bos_value, bos_type, confirmation_check_window):
+    if bos_type == "peak":
+        breaking_candles = confirmation_check_window.loc[confirmation_check_window.close > bos_value]
+    else:
+        breaking_candles = confirmation_check_window.loc[confirmation_check_window.close < bos_value]
+
+    if len(breaking_candles) > 0:
+        return True
+    return False
+
+
+def find_confirmed_boss(pbos_df: pd.DataFrame, pair_df: pd.DataFrame):
+    confirmed_bos_indices: list[int] = []
+    for pbos_row in pbos_df.itertuples():
+        confirmation_check_window = pair_df.iloc[pbos_row.pair_df_index + 1:]
+        if is_pbos_confirmed(pbos_row.pivot_value, pbos_row.pivot_type, confirmation_check_window):
+            confirmed_bos_indices.append(pbos_row.pair_df_index)
+
+    bos_df = pbos_df.loc[pbos_df.pair_df_index.isin(confirmed_bos_indices)]
+    return bos_df
