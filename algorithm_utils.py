@@ -325,3 +325,45 @@ def find_confirmed_boss(pbos_df: pd.DataFrame, pair_df: pd.DataFrame) -> pd.Data
 
     bos_df = pbos_df.loc[pbos_df.pair_df_index.isin(confirmed_bos_indices)]
     return bos_df
+
+
+def find_lpls(bos_df: pd.DataFrame, zigzag_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Function to find the last pivot liquidities (LPLs) in a zigzag DataFrame.
+
+    The function identifies the indices of the confirmed breakouts or breakdowns (BOS) in the zigzag DataFrame.
+    It then finds the indices of the pivots that are immediately before these BOS indices, which are the LPLs.
+    Finally, it returns a DataFrame containing the LPLs.
+
+    Parameters:
+    bos_df (pd.DataFrame): The DataFrame containing the confirmed breakouts or breakdowns (BOS).
+    zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
+
+    Returns:
+    pd.DataFrame: A DataFrame containing the last pivot liquidities (LPLs).
+    """
+
+    bos_indices = bos_df.pair_df_index
+    lpl_indices = [index - 1 for index in zigzag_df.loc[zigzag_df.pair_df_index.isin(bos_indices)].index]
+    return zigzag_df.iloc[lpl_indices]
+
+
+def find_lplbs(bos_df: pd.DataFrame, zigzag_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Function to find the last pivot liquidity breakouts (LPLBs) in a zigzag DataFrame.
+
+    The function identifies the indices of the confirmed breakouts or breakdowns (BOS) in the zigzag DataFrame.
+    It then finds the indices of the pivots that are immediately after these BOS indices, which are the LPLBs.
+    Finally, it returns a DataFrame containing the LPLBs.
+
+    Parameters:
+    bos_df (pd.DataFrame): The DataFrame containing the confirmed breakouts or breakdowns (BOS).
+    zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
+
+    Returns:
+    pd.DataFrame: A DataFrame containing the last pivot liquidity breakouts (LPLBs).
+    """
+
+    bos_indices = bos_df.pair_df_index
+    lplb_indices = [index + 1 for index in zigzag_df.loc[zigzag_df.pair_df_index.isin(bos_indices)].index]
+    return zigzag_df.iloc[lplb_indices]
