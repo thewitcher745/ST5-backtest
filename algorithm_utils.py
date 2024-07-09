@@ -147,10 +147,11 @@ def find_ascending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> 
     higher_low_chain_length: int = find_longest_chain(search_window_valleys, 'ascending')
     higher_high_chain_length: int = find_longest_chain(search_window_peaks, 'ascending')
 
-    # A variable which indicates if the OneDChain is actually simplifying a set of legs, which is used to find BOS points
-    is_simplifying: bool = higher_low_chain_length > 0 and higher_high_chain_length > 0
+    # A variable which indicates if the OneDChain can form a PBOS, which is formed when a OneDChain simplifies a zigzag AND its next pivot breaks
+    # a chain of unbroken ascending lows
+    is_forming_pbos: bool = 0 < higher_low_chain_length <= higher_high_chain_length and higher_high_chain_length > 0
 
-    return OneDChain.create(higher_low_chain_length, higher_high_chain_length, start_pair_df_index, 'ascending', is_simplifying)
+    return OneDChain.create(higher_low_chain_length, higher_high_chain_length, start_pair_df_index, 'ascending', is_forming_pbos)
 
 
 def find_descending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> OneDChain:
@@ -164,10 +165,11 @@ def find_descending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) ->
 
     lower_low_chain_length: int = find_longest_chain(search_window_valleys, 'descending')
     lower_high_chain_length: int = find_longest_chain(search_window_peaks, 'descending')
+    # A variable which indicates if the OneDChain can form a PBOS, which is formed when a OneDChain simplifies a zigzag AND its next pivot breaks
+    # a chain of unbroken descending highs
+    is_forming_pbos: bool = 0 < lower_high_chain_length <= lower_low_chain_length and lower_low_chain_length > 0
 
-    is_simplifying: bool = lower_low_chain_length > 0 and lower_high_chain_length > 0
-
-    return OneDChain.create(lower_low_chain_length, lower_high_chain_length, start_pair_df_index, 'descending', is_simplifying)
+    return OneDChain.create(lower_low_chain_length, lower_high_chain_length, start_pair_df_index, 'descending', is_forming_pbos)
 
 
 def simplify_chain(input_zigzag_df: pd.DataFrame,
@@ -206,7 +208,7 @@ def simplify_chain(input_zigzag_df: pd.DataFrame,
         return {
             "start_index": chain_start_pair_df_index,
             "end_index": chain_end_peak_pair_df_index,
-            "is_simplifying": high_low_chains.is_simplifying
+            "is_forming_pbos": high_low_chains.is_forming_pbos
         }
 
     elif high_low_chains.direction == 'descending':
@@ -218,7 +220,7 @@ def simplify_chain(input_zigzag_df: pd.DataFrame,
         return {
             "start_index": chain_start_pair_df_index,
             "end_index": chain_end_valley_pair_df_index,
-            "is_simplifying": high_low_chains.is_simplifying
+            "is_forming_pbos": high_low_chains.is_forming_pbos
         }
 
 
@@ -262,7 +264,7 @@ def generate_h_o_zigzag(zigzag_df: pd.DataFrame) -> pd.DataFrame:
             h_o_zigzag_indices.append(simplified_leg["start_index"])
 
         h_o_zigzag_indices.append(simplified_leg["end_index"])
-        if simplified_leg["is_simplifying"]:
+        if simplified_leg["is_forming_pbos"]:
             pbos_indices.append(simplified_leg["end_index"])
 
         # Update the current pair_df_index to the end index ([1]) of the last chain ([-1])
