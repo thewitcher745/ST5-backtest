@@ -129,6 +129,21 @@ class PlottingTool:
                           color=color)  # You can adjust the font size as needed
         ))
 
+    def draw_box_from_candle(self, candle, length, color='black'):
+        self.fig.add_shape(
+            type='rect',
+            xref='x',
+            yref='y',
+            x0=candle.name,
+            y0=candle.low,
+            x1=candle.name + length,
+            y1=candle.high,
+            fillcolor=color,
+            opacity=0.5,
+            layer='below',
+            line_width=0,
+        )
+
     def show(self, title: str = 'Price Chart',
              xaxis_title: str = 'Date',
              yaxis_title: str = 'Price'):
