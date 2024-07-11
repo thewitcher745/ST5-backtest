@@ -2,6 +2,8 @@ from typing import Union, List, Tuple
 import pandas as pd
 import plotly.graph_objects as go
 
+from algorithm_utils import Box
+
 
 def load_local_data(hdf_path: str = './cached_data/XEMUSDT.hdf5') -> pd.DataFrame:
     pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
@@ -129,18 +131,21 @@ class PlottingTool:
                           color=color)  # You can adjust the font size as needed
         ))
 
-    def draw_box_from_candle(self, candle, length, color='black'):
+    def draw_box(self, box: Box, pair_df_end_index, color=None):
+        x1 = pair_df_end_index if len(box.price_reentry_indices) == 0 else box.price_reentry_indices[0]
+        if color is None:
+            color = "green" if box.type == "long" else "red"
         self.fig.add_shape(
-            type='rect',
-            xref='x',
-            yref='y',
-            x0=candle.name,
-            y0=candle.low,
-            x1=candle.name + length,
-            y1=candle.high,
+            type="rect",
+            xref="x",
+            yref="y",
+            x0=box.start_index,
+            y0=box.bottom,
+            x1=x1,
+            y1=box.top,
             fillcolor=color,
             opacity=0.5,
-            layer='below',
+            layer="above",
             line_width=0,
         )
 
