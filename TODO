@@ -1,3 +1,3 @@
 - Make algorithm_utils use OOP, so the data doesn't have to be moved around so much
-
+- Make check_box_entries in datatypes.Box use multiple reentries, governed by a universal constant
 + Higher order zigzag can only be BOS if it simplifies the blue zigzag
