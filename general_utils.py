@@ -160,3 +160,15 @@ class PlottingTool:
 
         self.fig.show()
 
+def convert_timestamp_to_readable(timestamp: pd.Timestamp):
+    utc = timestamp.to_pydatetime()
+
+    def two_char_long(num):
+        if num >= 10:
+            return str(num)
+        else:
+            return "0" + str(num)
+
+    readable_format = f"/{utc.year}.{utc.month}.{utc.day}/{two_char_long(utc.hour)}:{two_char_long(utc.minute)}:{two_char_long(utc.second)}"
+
+    return readable_format
