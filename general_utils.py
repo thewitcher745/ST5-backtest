@@ -169,6 +169,6 @@ def convert_timestamp_to_readable(timestamp: pd.Timestamp):
         else:
             return "0" + str(num)
 
-    readable_format = f"/{utc.year}.{utc.month}.{utc.day}/{two_char_long(utc.hour)}:{two_char_long(utc.minute)}:{two_char_long(utc.second)}"
+    readable_format = f"{utc.year}.{utc.month}.{utc.day}/{two_char_long(utc.hour)}:{two_char_long(utc.minute)}:{two_char_long(utc.second)}"
 
     return readable_format
