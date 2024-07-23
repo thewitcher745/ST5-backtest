@@ -74,8 +74,8 @@ class Box:
         self.start_index = base_candle.pair_df_index
         self.base_candle = base_candle
         self.type = box_type
-        self.id = gen_utils.convert_timestamp_to_readable(base_candle.time) + "L" if box_type == "long"\
-            else gen_utils.convert_timestamp_to_readable(base_candle.time) + "S"
+        self.id = f"{base_candle.pair_df_index}/" + gen_utils.convert_timestamp_to_readable(base_candle.time)
+        self.id += "L" if box_type == "long" else "S"
 
         self.top = base_candle.high
         self.bottom = base_candle.low
