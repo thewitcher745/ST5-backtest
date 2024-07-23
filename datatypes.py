@@ -2,6 +2,8 @@ from typing import NamedTuple, List, Tuple, Type, Union
 import pandas as pd
 from datetime import datetime
 
+import general_utils as gen_utils
+
 
 class Candle(NamedTuple):
     pair_df_index: int
@@ -72,6 +74,8 @@ class Box:
         self.start_index = base_candle.pair_df_index
         self.base_candle = base_candle
         self.type = box_type
+        self.id = gen_utils.convert_timestamp_to_readable(base_candle.time) + "L" if box_type == "long"\
+            else gen_utils.convert_timestamp_to_readable(base_candle.time) + "S"
 
         self.top = base_candle.high
         self.bottom = base_candle.low
