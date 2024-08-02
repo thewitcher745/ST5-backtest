@@ -179,3 +179,204 @@ from datatypes import *
 #     merged_patterns = merge_overlapping_patterns(patterns)
 #
 #     return merged_patterns
+
+
+def simplify_chain(input_zigzag_df: pd.DataFrame,
+                   high_low_chains: OneDChain) -> dict:
+    """
+        Function that takes a chain of higher low/higher highs (ascending), or lower low/lower highs (descending) and
+        returns a dict object with instructions on forming a higher order zigzag with it.
+
+        Parameters:
+        zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
+        high_low_chains (OneDChain): A OneDChain object containing the chain lengths and the direction.
+
+        Returns:
+        dict: A dict object containing the pair_df_indices of the start and end of the chain, as well as a bool representing if the chain has
+        simplified the lower order zigzag
+    """
+    zigzag_df = input_zigzag_df.copy()
+
+    # Filter out the rows that are before the start index.
+    zigzag_df = zigzag_df[zigzag_df.pair_df_index >= high_low_chains.start_pair_df_index]
+
+    # The chain will start at the first pair_df_index in zigzag_df, regardless of direction
+    chain_start_pair_df_index = zigzag_df.reset_index(drop=True).iloc[0].pair_df_index
+    if high_low_chains.direction == 'ascending':
+        # If the chain is ascending, it starts at a valley and ends on a peak and vice versa. The ending peak/valley would be the
+        # minimum of the two chain end lengths, as that is where the pattern is either ended by the higher highs coming to an end or
+        # the lower lows
+        peaks_df: pd.DataFrame = zigzag_df[zigzag_df.pivot_type == 'peak']
+        total_chain_end_index = min(high_low_chains.low_chain_length, high_low_chains.high_chain_length)
+
+        # The reset_index function is used because the chain length is calculated from the flattened form of a pandas Series in
+        # find_longest_chain without inherited indices from the parent dataframe.
+
+        chain_end_peak_pair_df_index = peaks_df.reset_index(drop=True).iloc[total_chain_end_index].pair_df_index
+
+        return {
+            "start_index": chain_start_pair_df_index,
+            "end_index": chain_end_peak_pair_df_index,
+            "is_forming_pbos": high_low_chains.is_forming_pbos
+        }
+
+    elif high_low_chains.direction == 'descending':
+        valleys_df: pd.DataFrame = zigzag_df[zigzag_df.pivot_type == 'valley']
+        total_chain_end_index = min(high_low_chains.low_chain_length, high_low_chains.high_chain_length)
+
+        chain_end_valley_pair_df_index = valleys_df.reset_index(drop=True).iloc[total_chain_end_index].pair_df_index
+
+        return {
+            "start_index": chain_start_pair_df_index,
+            "end_index": chain_end_valley_pair_df_index,
+            "is_forming_pbos": high_low_chains.is_forming_pbos
+        }
+
+
+def generate_h_o_zigzag(zigzag_df: pd.DataFrame) -> pd.DataFrame:
+    """
+        Function to generate a higher order zigzag from a given zigzag DataFrame.
+        It iterates through the DataFrame, starting from the first pivot, and finds chains of ascending or descending pivots.
+        Then it turns those chains into straight zigzags and appends them to a list.
+        It stops when it reaches the last pivot in the DataFrame.
+
+        Parameters:
+        zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data, most importantly pivot_value, pivot_type and pair_df_index columns
+
+        Returns:
+        pd.DataFrame: A list of tuples, where each tuple contains the start and end indices of a chain.
+    """
+
+    # Initialize an empty list to store the chains
+    h_o_zigzag_indices: list[int] = []
+    pbos_indices: list[int] = []
+
+    # Get the maximum and minimum pair_df_index in the DataFrame, used as the start and end to the while loop
+    max_pair_df_index: int = zigzag_df.pair_df_index.max()
+    current_pair_df_index: int = zigzag_df.pair_df_index.min()
+
+    # Loop until the current pair_df_index reaches the maximum
+    while current_pair_df_index != max_pair_df_index:
+        # Get the pivot at the current pair_df_index
+        pivot = Pivot.create(zigzag_df[zigzag_df.pair_df_index == current_pair_df_index].iloc[0])
+
+        # If the pivot is a peak, find descending chains; if it's a valley, find ascending chains
+        # Since an ascending chain can only start at a valley, and a descending chain can only start at a peak
+        if pivot.pivot_type == 'peak':
+            chains = find_descending_chains(zigzag_df, pivot.pair_df_index)
+        else:
+            chains = find_ascending_chains(zigzag_df, pivot.pair_df_index)
+
+        simplified_leg = simplify_chain(zigzag_df, chains)
+        # Simplify the unidirectional chain and add it to the h_o_zigzag_indices. If the list is empty, also append the starting index of the leg
+        if len(h_o_zigzag_indices) == 0:
+            h_o_zigzag_indices.append(simplified_leg["start_index"])
+
+        h_o_zigzag_indices.append(simplified_leg["end_index"])
+        if simplified_leg["is_forming_pbos"]:
+            pbos_indices.append(simplified_leg["end_index"])
+
+        # Update the current pair_df_index to the end index ([1]) of the last chain ([-1])
+        current_pair_df_index = simplified_leg["end_index"]
+
+    # Convert the list of pair_df_indices to a pandas dataframe containing the values, types and times of the pivots
+    h_o_zigzag_df: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index.isin(h_o_zigzag_indices)].copy()
+    h_o_zigzag_df.loc[:, "is_pbos"] = h_o_zigzag_df.pair_df_index.isin(pbos_indices)
+    return h_o_zigzag_df
+
+
+def is_pbos_confirmed(bos_value, bos_type, confirmation_check_window) -> bool:
+    """
+    Function to check if a potential breakout or breakdown (PBOS) is confirmed.
+
+    A PBOS is confirmed if there are any candles in the confirmation check window that break through the PBOS value.
+    If the PBOS is a peak, a confirmation is a close price greater than the PBOS value.
+    If the PBOS is a valley, a confirmation is a close price less than the PBOS value.
+
+    Parameters:
+    bos_value (float): The value of the potential breakout or breakdown (PBOS).
+    bos_type (str): The type of the PBOS. Can be 'peak' or 'valley'.
+    confirmation_check_window (pd.DataFrame): The DataFrame containing the candlestick data to check for confirmation.
+
+    Returns:
+    bool: True if the PBOS is confirmed, False otherwise.
+    """
+    if bos_type == "peak":
+        breaking_candles = confirmation_check_window.loc[confirmation_check_window.close > bos_value]
+    else:
+        breaking_candles = confirmation_check_window.loc[confirmation_check_window.close < bos_value]
+
+    if len(breaking_candles) > 0:
+        return True
+    return False
+
+
+def find_confirmed_boss(pbos_df: pd.DataFrame, pair_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Function to find confirmed breakouts or breakdowns (BOS) from a DataFrame of potential BOS (PBOS).
+
+    A BOS is confirmed if there are any candles in the confirmation check window that break through the PBOS value.
+    The function iterates over the PBOS DataFrame and checks each PBOS for confirmation.
+    If a PBOS is confirmed, its index is added to a list of confirmed BOS indices.
+    Finally, a DataFrame of confirmed BOS is returned.
+
+    Parameters:
+    pbos_df (pd.DataFrame): The DataFrame containing the potential breakouts or breakdowns (PBOS).
+    pair_df (pd.DataFrame): The DataFrame containing the candlestick data to check for confirmation.
+
+    Returns:
+    pd.DataFrame: A DataFrame containing the confirmed breakouts or breakdowns (BOS).
+    """
+
+    confirmed_bos_indices: list[int] = []
+    for pbos_row in pbos_df.itertuples():
+        confirmation_check_window = pair_df.iloc[pbos_row.pair_df_index + 1:]
+        if is_pbos_confirmed(pbos_row.pivot_value, pbos_row.pivot_type, confirmation_check_window):
+            confirmed_bos_indices.append(pbos_row.pair_df_index)
+
+    bos_df = pbos_df.loc[pbos_df.pair_df_index.isin(confirmed_bos_indices)]
+    return bos_df
+
+
+def find_lpls(bos_df: pd.DataFrame, zigzag_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Function to find the last pivot liquidities (LPLs) in a zigzag DataFrame.
+
+    The function identifies the indices of the confirmed breakouts or breakdowns (BOS) in the zigzag DataFrame.
+    It then finds the indices of the pivots that are immediately before these BOS indices, which are the LPLs.
+    Finally, it returns a DataFrame containing the LPLs.
+
+    Parameters:
+    bos_df (pd.DataFrame): The DataFrame containing the confirmed breakouts or breakdowns (BOS).
+    zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
+
+    Returns:
+    pd.DataFrame: A DataFrame containing the last pivot liquidities (LPLs).
+    """
+
+    bos_indices = bos_df.pair_df_index
+    lpl_indices = [index - 1 for index in zigzag_df.loc[zigzag_df.pair_df_index.isin(bos_indices)].index]
+    return zigzag_df.iloc[lpl_indices]
+
+
+def find_lplbs(bos_df: pd.DataFrame, zigzag_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Function to find the last pivot liquidity breakouts (LPLBs) in a zigzag DataFrame.
+
+    The function identifies the indices of the confirmed breakouts or breakdowns (BOS) in the zigzag DataFrame.
+    It then finds the indices of the pivots that are immediately after these BOS indices, which are the LPLBs.
+    Finally, it returns a DataFrame containing the LPLBs.
+
+    Parameters:
+    bos_df (pd.DataFrame): The DataFrame containing the confirmed breakouts or breakdowns (BOS).
+    zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
+
+    Returns:
+    pd.DataFrame: A DataFrame containing the last pivot liquidity breakouts (LPLBs).
+    """
+
+    bos_indices = bos_df.pair_df_index
+    lplb_indices = [index + 1 for index in zigzag_df.loc[zigzag_df.pair_df_index.isin(bos_indices)].index]
+    return zigzag_df.iloc[lplb_indices]
+
+# def calculate_FVG_from_candles(candles: ) -> Tuple:

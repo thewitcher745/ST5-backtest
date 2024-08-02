@@ -58,15 +58,24 @@ class Leg(NamedTuple):
 
 
 class OneDChain(NamedTuple):
-    low_chain_length: int
-    high_chain_length: int
+    chain_length: int
     start_pair_df_index: int
     direction: str
-    is_forming_pbos: bool
 
     @staticmethod
-    def create(low_chain_length: int, high_chain_length: int, start_pair_df_index: int, direction: str, is_forming_pbos: bool):
-        return OneDChain(low_chain_length, high_chain_length, start_pair_df_index, direction, is_forming_pbos)
+    def create(chain_length: int, start_pair_df_index: int, direction: str):
+        return OneDChain(chain_length, start_pair_df_index, direction)
+
+
+class PBOSRegion(NamedTuple):
+    start_pbos: int
+    end_pbos: int
+    closing_candle: int
+    pbos_type: str
+
+    @staticmethod
+    def create(start_pbos: int, end_pbos: int, closing_candle: int, pbos_type: str):
+        return PBOSRegion(start_pbos, end_pbos, closing_candle, pbos_type)
 
 
 class Box:

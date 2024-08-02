@@ -2,7 +2,7 @@ from typing import Union, List, Tuple
 import pandas as pd
 import plotly.graph_objects as go
 
-from algorithm_utils import Box
+# from algorithm_utils import Box
 
 
 def load_local_data(hdf_path: str = './cached_data/XEMUSDT.hdf5') -> pd.DataFrame:
@@ -97,7 +97,7 @@ class PlottingTool:
                     line_width=0,
                 )
 
-    def draw_points_with_label(self, points_df: pd.DataFrame, label: str, color=None):
+    def draw_points_with_label(self, x_data: list, y_data: list, label: str, color=None, draw_line=False):
         # Plot the zigzag with the entered or default parameters
         if not color:
             if label == "PBOS" or label == "BOS":
@@ -109,16 +109,13 @@ class PlottingTool:
             else:
                 color = "purple"
 
-        x_data = points_df.pair_df_index
-        if self.x_axis_type == 'time':
-            x_data = points_df.time
 
-        positions = ["top center" if point_type == "peak" else "bottom center" for point_type in points_df.pivot_type.tolist()]
+        # positions = ["top center" if point_type == "peak" else "bottom center" for point_type in points_df.pivot_type.tolist()]
 
         self.fig.add_trace(go.Scatter(
             x=x_data,
-            y=points_df.pivot_value,
-            mode='markers+text',  # Added text mode
+            y=y_data,
+            mode='lines+text' if draw_line else "markers+text",  # Added text mode
             name=label,
             marker=dict(
                 color=color,
@@ -126,12 +123,12 @@ class PlottingTool:
                 symbol='circle-open'  # This creates hollow circles
             ),
             text=label,  # This sets the text to be displayed
-            textposition=positions,  # This positions the text above the markers
+            textposition="bottom center",  # This positions the text above the markers
             textfont=dict(size=10,
                           color=color)  # You can adjust the font size as needed
         ))
 
-    def draw_box(self, box: Box, pair_df_end_index, color=None):
+    def draw_box(self, box, pair_df_end_index, color=None):
         x1 = pair_df_end_index if len(box.price_reentry_indices) == 0 else box.price_reentry_indices[0]
         if color is None:
             color = "green" if box.type == "long" else "red"

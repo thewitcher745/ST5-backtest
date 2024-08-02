@@ -120,7 +120,7 @@ def find_longest_chain(values: pd.Series, direction: str = 'ascending') -> int:
     return end_index
 
 
-def find_ascending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> OneDChain:
+def find_ascending_valleys(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> OneDChain:
     """
         Function to find the longest chain of higher lows in a zigzag DataFrame.
         It starts from a given index and goes forward, looking for valleys with ascending pivot values.
@@ -131,7 +131,7 @@ def find_ascending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> 
         start_pair_df_index (int): The index to start the search from.
 
         Returns:
-        OneDChain: The start and end indices of the chain, along with information on if the chain simplifies an LO zigzag
+        OneDChain: A one directional chain object representing the chain found
     """
 
     # If the selected start_index isn't a valley, throw an error
@@ -141,231 +141,230 @@ def find_ascending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> 
     # The slice of the zigzag_df dataframe that needs to be searched
     search_window: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index >= start_pair_df_index]
 
-    search_window_peaks: pd.Series = search_window[search_window.pivot_type == 'peak'].pivot_value
     search_window_valleys: pd.Series = search_window[search_window.pivot_type == 'valley'].pivot_value
 
-    higher_low_chain_length: int = find_longest_chain(search_window_valleys, 'ascending')
-    higher_high_chain_length: int = find_longest_chain(search_window_peaks, 'ascending')
+    chain_length: int = find_longest_chain(search_window_valleys, 'ascending')
 
-    # A variable which indicates if the OneDChain can form a PBOS, which is formed when a OneDChain simplifies a zigzag AND its next pivot breaks
-    # a chain of unbroken ascending lows
-    is_forming_pbos: bool = 0 < higher_low_chain_length <= higher_high_chain_length and higher_high_chain_length > 0
-
-    return OneDChain.create(higher_low_chain_length, higher_high_chain_length, start_pair_df_index, 'ascending', is_forming_pbos)
+    return OneDChain.create(chain_length, start_pair_df_index, 'ascending')
 
 
-def find_descending_chains(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> OneDChain:
-    if zigzag_df[zigzag_df.pair_df_index == start_pair_df_index].iloc[0].pivot_type != 'peak':
-        raise ValueError('The start index must be a peak.')
-
-    search_window: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index >= start_pair_df_index]
-
-    search_window_peaks: pd.Series = search_window[search_window.pivot_type == 'peak'].pivot_value
-    search_window_valleys: pd.Series = search_window[search_window.pivot_type == 'valley'].pivot_value
-
-    lower_low_chain_length: int = find_longest_chain(search_window_valleys, 'descending')
-    lower_high_chain_length: int = find_longest_chain(search_window_peaks, 'descending')
-    # A variable which indicates if the OneDChain can form a PBOS, which is formed when a OneDChain simplifies a zigzag AND its next pivot breaks
-    # a chain of unbroken descending highs
-    is_forming_pbos: bool = 0 < lower_high_chain_length <= lower_low_chain_length and lower_low_chain_length > 0
-
-    return OneDChain.create(lower_low_chain_length, lower_high_chain_length, start_pair_df_index, 'descending', is_forming_pbos)
-
-
-def simplify_chain(input_zigzag_df: pd.DataFrame,
-                   high_low_chains: OneDChain) -> dict:
+def find_descending_peaks(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> OneDChain:
     """
-        Function that takes a chain of higher low/higher highs (ascending), or lower low/lower highs (descending) and
-        returns a dict object with instructions on forming a higher order zigzag with it.
+        Function to find the longest chain of lower highs in a zigzag DataFrame.
+        It starts from a given index and goes forward, looking for peaks with descending pivot values.
+        It stops once it finds a higher high than the previous.
 
         Parameters:
         zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
-        high_low_chains (OneDChain): A OneDChain object containing the chain lengths and the direction.
+        start_pair_df_index (int): The index to start the search from.
 
         Returns:
-        dict: A dict object containing the pair_df_indices of the start and end of the chain, as well as a bool representing if the chain has
-        simplified the lower order zigzag
-    """
-    zigzag_df = input_zigzag_df.copy()
-
-    # Filter out the rows that are before the start index.
-    zigzag_df = zigzag_df[zigzag_df.pair_df_index >= high_low_chains.start_pair_df_index]
-
-    # The chain will start at the first pair_df_index in zigzag_df, regardless of direction
-    chain_start_pair_df_index = zigzag_df.reset_index(drop=True).iloc[0].pair_df_index
-    if high_low_chains.direction == 'ascending':
-        # If the chain is ascending, it starts at a valley and ends on a peak and vice versa. The ending peak/valley would be the
-        # minimum of the two chain end lengths, as that is where the pattern is either ended by the higher highs coming to an end or
-        # the lower lows
-        peaks_df: pd.DataFrame = zigzag_df[zigzag_df.pivot_type == 'peak']
-        total_chain_end_index = min(high_low_chains.low_chain_length, high_low_chains.high_chain_length)
-
-        # The reset_index function is used because the chain length is calculated from the flattened form of a pandas Series in
-        # find_longest_chain without inherited indices from the parent dataframe.
-
-        chain_end_peak_pair_df_index = peaks_df.reset_index(drop=True).iloc[total_chain_end_index].pair_df_index
-
-        return {
-            "start_index": chain_start_pair_df_index,
-            "end_index": chain_end_peak_pair_df_index,
-            "is_forming_pbos": high_low_chains.is_forming_pbos
-        }
-
-    elif high_low_chains.direction == 'descending':
-        valleys_df: pd.DataFrame = zigzag_df[zigzag_df.pivot_type == 'valley']
-        total_chain_end_index = min(high_low_chains.low_chain_length, high_low_chains.high_chain_length)
-
-        chain_end_valley_pair_df_index = valleys_df.reset_index(drop=True).iloc[total_chain_end_index].pair_df_index
-
-        return {
-            "start_index": chain_start_pair_df_index,
-            "end_index": chain_end_valley_pair_df_index,
-            "is_forming_pbos": high_low_chains.is_forming_pbos
-        }
-
-
-def generate_h_o_zigzag(zigzag_df: pd.DataFrame) -> pd.DataFrame:
-    """
-        Function to generate a higher order zigzag from a given zigzag DataFrame.
-        It iterates through the DataFrame, starting from the first pivot, and finds chains of ascending or descending pivots.
-        Then it turns those chains into straight zigzags and appends them to a list.
-        It stops when it reaches the last pivot in the DataFrame.
-
-        Parameters:
-        zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data, most importantly pivot_value, pivot_type and pair_df_index columns
-
-        Returns:
-        pd.DataFrame: A list of tuples, where each tuple contains the start and end indices of a chain.
+        OneDChain: A one directional chain object representing the chain found
     """
 
-    # Initialize an empty list to store the chains
-    h_o_zigzag_indices: list[int] = []
-    pbos_indices: list[int] = []
+    # If the selected start_index isn't a valley, throw an error
+    if zigzag_df[zigzag_df.pair_df_index == start_pair_df_index].iloc[0].pivot_type != 'peak':
+        raise ValueError('The start index must be a peak.')
 
-    # Get the maximum and minimum pair_df_index in the DataFrame, used as the start and end to the while loop
-    max_pair_df_index: int = zigzag_df.pair_df_index.max()
-    current_pair_df_index: int = zigzag_df.pair_df_index.min()
+    # The slice of the zigzag_df dataframe that needs to be searched
+    search_window: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index >= start_pair_df_index]
 
-    # Loop until the current pair_df_index reaches the maximum
-    while current_pair_df_index != max_pair_df_index:
-        # Get the pivot at the current pair_df_index
-        pivot = Pivot.create(zigzag_df[zigzag_df.pair_df_index == current_pair_df_index].iloc[0])
+    search_window_peaks: pd.Series = search_window[search_window.pivot_type == 'peak'].pivot_value
 
-        # If the pivot is a peak, find descending chains; if it's a valley, find ascending chains
-        # Since an ascending chain can only start at a valley, and a descending chain can only start at a peak
-        if pivot.pivot_type == 'peak':
-            chains = find_descending_chains(zigzag_df, pivot.pair_df_index)
-        else:
-            chains = find_ascending_chains(zigzag_df, pivot.pair_df_index)
+    chain_length: int = find_longest_chain(search_window_peaks, 'descending')
 
-        simplified_leg = simplify_chain(zigzag_df, chains)
-        # Simplify the unidirectional chain and add it to the h_o_zigzag_indices. If the list is empty, also append the starting index of the leg
-        if len(h_o_zigzag_indices) == 0:
-            h_o_zigzag_indices.append(simplified_leg["start_index"])
-
-        h_o_zigzag_indices.append(simplified_leg["end_index"])
-        if simplified_leg["is_forming_pbos"]:
-            pbos_indices.append(simplified_leg["end_index"])
-
-        # Update the current pair_df_index to the end index ([1]) of the last chain ([-1])
-        current_pair_df_index = simplified_leg["end_index"]
-
-    # Convert the list of pair_df_indices to a pandas dataframe containing the values, types and times of the pivots
-    h_o_zigzag_df: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index.isin(h_o_zigzag_indices)].copy()
-    h_o_zigzag_df.loc[:, "is_pbos"] = h_o_zigzag_df.pair_df_index.isin(pbos_indices)
-    return h_o_zigzag_df
+    return OneDChain.create(chain_length, start_pair_df_index, 'descending')
 
 
-def is_pbos_confirmed(bos_value, bos_type, confirmation_check_window) -> bool:
-    """
-    Function to check if a potential breakout or breakdown (PBOS) is confirmed.
+class Algo:
+    def __init__(self, pair_df, symbol):
+        self.pair_df: pd.DataFrame = pair_df
+        self.symbol: str = symbol
+        self.zigzag_df = None
+        self.pbos_indices = []
+        self.pbos_list = []
+        self.is_start_established = False
+        self.h_o_indices = []
 
-    A PBOS is confirmed if there are any candles in the confirmation check window that break through the PBOS value.
-    If the PBOS is a peak, a confirmation is a close price greater than the PBOS value.
-    If the PBOS is a valley, a confirmation is a close price less than the PBOS value.
+    def init_zigzag(self) -> None:
+        """
+            Method to identify turning points in a candlestick chart.
+            It compares each candle to its previous pivot to determine if it's a new pivot point.
+            This implementation is less optimized than the deprecated version, as it doesn't use
+            vectorized operations, but it is what it is
 
-    Parameters:
-    bos_value (float): The value of the potential breakout or breakdown (PBOS).
-    bos_type (str): The type of the PBOS. Can be 'peak' or 'valley'.
-    confirmation_check_window (pd.DataFrame): The DataFrame containing the candlestick data to check for confirmation.
+            Parameters:
+            pair_df (pd.DataFrame): The input DataFrame containing the candlestick data.
 
-    Returns:
-    bool: True if the PBOS is confirmed, False otherwise.
-    """
-    if bos_type == "peak":
-        breaking_candles = confirmation_check_window.loc[confirmation_check_window.close > bos_value]
-    else:
-        breaking_candles = confirmation_check_window.loc[confirmation_check_window.close < bos_value]
+            Returns:
+            pd.DataFrame: A DataFrame containing the identified turning points.
+            """
 
-    if len(breaking_candles) > 0:
-        return True
-    return False
+        # Find the first candle that has a higher high or a lower low than its previous candle
+        # and set it as the first pivot. Also set the type of the pivot (peak or valley)
+        last_pivot_candle_series = \
+            self.pair_df[(self.pair_df['high'] > self.pair_df['high'].shift(1)) | (self.pair_df['low'] < self.pair_df['low'].shift(1))].iloc[0]
+        last_pivot_type: str = 'valley'
+        if last_pivot_candle_series.high > self.pair_df.iloc[last_pivot_candle_series.name - 1].high:
+            last_pivot_type = 'peak'
 
+        last_pivot_candle: Candle = Candle.create(last_pivot_candle_series)
+        pivots: List[Pivot] = []
 
-def find_confirmed_boss(pbos_df: pd.DataFrame, pair_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Function to find confirmed breakouts or breakdowns (BOS) from a DataFrame of potential BOS (PBOS).
+        # Start at the candle right after the last (first) pivot
+        for row in self.pair_df.iloc[last_pivot_candle.pair_df_index + 1:].itertuples():
 
-    A BOS is confirmed if there are any candles in the confirmation check window that break through the PBOS value.
-    The function iterates over the PBOS DataFrame and checks each PBOS for confirmation.
-    If a PBOS is confirmed, its index is added to a list of confirmed BOS indices.
-    Finally, a DataFrame of confirmed BOS is returned.
+            # Conditions to check if the current candle is an extension of the last pivot or a reversal
+            peak_extension_condition: bool = row.high > last_pivot_candle.high and last_pivot_type == 'peak'
+            valley_extension_condition: bool = row.low < last_pivot_candle.low and last_pivot_type == 'valley'
 
-    Parameters:
-    pbos_df (pd.DataFrame): The DataFrame containing the potential breakouts or breakdowns (PBOS).
-    pair_df (pd.DataFrame): The DataFrame containing the candlestick data to check for confirmation.
+            reversal_from_peak_condition = row.low < last_pivot_candle.low and last_pivot_type == 'peak'
+            reversal_from_valley_condition = row.high > last_pivot_candle.high and last_pivot_type == 'valley'
 
-    Returns:
-    pd.DataFrame: A DataFrame containing the confirmed breakouts or breakdowns (BOS).
-    """
+            # Does the candle register both a higher high AND a lower low?
+            if (reversal_from_valley_condition and valley_extension_condition) or (peak_extension_condition and reversal_from_peak_condition):
 
-    confirmed_bos_indices: list[int] = []
-    for pbos_row in pbos_df.itertuples():
-        confirmation_check_window = pair_df.iloc[pbos_row.pair_df_index + 1:]
-        if is_pbos_confirmed(pbos_row.pivot_value, pbos_row.pivot_type, confirmation_check_window):
-            confirmed_bos_indices.append(pbos_row.pair_df_index)
+                # INITIAL NAIVE IMPLEMENTATION
+                # Add the last previous pivot to the list
+                # pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
 
-    bos_df = pbos_df.loc[pbos_df.pair_df_index.isin(confirmed_bos_indices)]
-    return bos_df
+                # Update the last pivot's type and value
+                # last_pivot_candle = Candle.create(row)
+                # last_pivot_type = 'valley' if last_pivot_type == 'peak' else 'peak'
 
+                # JUDGING BASED ON CANDLE COLOR
+                # If the candle is green, that means the low value was probably hit before the high value
+                # If the candle is red, that means the high value was probably hit before the low value
+                # This means that if the candle is green, we can extend a valley, and if it's red, we can extend a peak
+                # Otherwise the direction must flip
+                if (row.candle_color == 'green' and last_pivot_type == 'valley') or (row.candle_color == 'red' and last_pivot_type == 'peak'):
+                    last_pivot_candle = Candle.create(row)
 
-def find_lpls(bos_df: pd.DataFrame, zigzag_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Function to find the last pivot liquidities (LPLs) in a zigzag DataFrame.
+                else:
+                    # Add the last previous pivot to the list of pivots
+                    pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
 
-    The function identifies the indices of the confirmed breakouts or breakdowns (BOS) in the zigzag DataFrame.
-    It then finds the indices of the pivots that are immediately before these BOS indices, which are the LPLs.
-    Finally, it returns a DataFrame containing the LPLs.
+                    # Update the last pivot's type and value
+                    last_pivot_candle = Candle.create(row)
+                    last_pivot_type = 'valley' if last_pivot_type == 'peak' else 'peak'
 
-    Parameters:
-    bos_df (pd.DataFrame): The DataFrame containing the confirmed breakouts or breakdowns (BOS).
-    zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
+            # Has a same direction pivot been found?
+            if peak_extension_condition or valley_extension_condition:
+                # Don't change the direction of the last pivot found, just update its value
+                last_pivot_candle = Candle.create(row)
 
-    Returns:
-    pd.DataFrame: A DataFrame containing the last pivot liquidities (LPLs).
-    """
+            # Has a pivot in the opposite direction been found?
+            elif reversal_from_valley_condition or reversal_from_peak_condition:
+                # Add the last previous pivot to the list of pivots
+                pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
 
-    bos_indices = bos_df.pair_df_index
-    lpl_indices = [index - 1 for index in zigzag_df.loc[zigzag_df.pair_df_index.isin(bos_indices)].index]
-    return zigzag_df.iloc[lpl_indices]
+                # Update the last pivot's type and value
+                last_pivot_candle = Candle.create(row)
+                last_pivot_type = 'valley' if last_pivot_type == 'peak' else 'peak'
 
+        # Convert the pivot list to zigzag_df
+        zigzag_df = pd.DataFrame.from_dict(pivot._asdict() for pivot in pivots)
 
-def find_lplbs(bos_df: pd.DataFrame, zigzag_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Function to find the last pivot liquidity breakouts (LPLBs) in a zigzag DataFrame.
+        self.zigzag_df = zigzag_df
 
-    The function identifies the indices of the confirmed breakouts or breakdowns (BOS) in the zigzag DataFrame.
-    It then finds the indices of the pivots that are immediately after these BOS indices, which are the LPLBs.
-    Finally, it returns a DataFrame containing the LPLBs.
+    def calc_h_o_zigzag(self) -> pd.DataFrame:
+        # The current_pivot_index represents the entire zigzag. We only want to search for new things until we reach the end of the
+        # currently available zigzag. Note that this is the original zigzag_df DataFrame index, not the pair_df_index
+        current_pivot_index = 0
+        # lpl_l_indices = []
+        # lpl_s_indices = []
+        while current_pivot_index < len(self.zigzag_df):
+            # current_pivot is basically the row from the zigzag_df that we're currently looking at
+            current_pivot = self.zigzag_df.iloc[current_pivot_index]
 
-    Parameters:
-    bos_df (pd.DataFrame): The DataFrame containing the confirmed breakouts or breakdowns (BOS).
-    zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
+            # Use previously defined functions to find the longest chains of ascending valleys and descending peaks
+            if current_pivot.pivot_type == "valley":
+                chain = find_ascending_valleys(self.zigzag_df, current_pivot.pair_df_index)
 
-    Returns:
-    pd.DataFrame: A DataFrame containing the last pivot liquidity breakouts (LPLBs).
-    """
+            else:
+                chain = find_descending_peaks(self.zigzag_df, current_pivot.pair_df_index)
 
-    bos_indices = bos_df.pair_df_index
-    lplb_indices = [index + 1 for index in zigzag_df.loc[zigzag_df.pair_df_index.isin(bos_indices)].index]
-    return zigzag_df.iloc[lplb_indices]
+            # If the chain is longer than 0, add its last pivot + 1 to the list of PBOS's
+            # The coefficient 2 is required because there is as many peaks as there are valleys
+            current_pivot_index += 2 * chain.chain_length + 1
+
+            # If there is a non-single chain (which would have a length of 0 if single), add the last pivot to the list of PBOS's
+            if chain.chain_length > 0:
+                # This snippet basically skips the first PBOS which is actually the starting index. Add its pair_df_index to h_o_zigzag,
+                # effectively starting it
+                if not self.is_start_established:
+                    self.h_o_indices.append(current_pivot.pair_df_index)
+                    self.is_start_established = True
+                    continue
+
+                self.pbos_indices.append(current_pivot.pair_df_index)
+
+                # This section will include an inner loop, which checks to see how the PBOS (or the LPL?) get broken by the candles
+                while True:
+                    latest_pbos = self.pair_df.iloc[self.pbos_indices[-1]]
+                    # print(self.pbos_indices)
+                    latest_pbos_value = latest_pbos.high if current_pivot.pivot_type == "peak" else latest_pbos.low
+                    # Now we need to check if the most recently added PBOS has a candle after it which breaks it by closing,
+                    # or by having a shadow which breaks it
+
+                    # If the candle breaks the PBOS by its shadow, the most recent PBOS will be moved to that candle instead
+                    search_window: pd.DataFrame = self.pair_df.iloc[current_pivot.pair_df_index + 1:]
+
+                    # The definition of "breaking" is different whether the PBOS is a peak or a valley
+                    if current_pivot.pivot_type == "peak":
+                        shadow_breaking_candles = search_window[search_window.high > latest_pbos_value]
+                        close_breaking_candles = search_window[search_window.close > latest_pbos_value]
+                    else:
+                        shadow_breaking_candles = search_window[search_window.low < latest_pbos_value]
+                        close_breaking_candles = search_window[search_window.close < latest_pbos_value]
+
+                    if shadow_breaking_candles.first_valid_index() is not None and close_breaking_candles.first_valid_index() is not None:
+                        # If the shadow breaking the PBOS happens before the close breaking the PBOS
+                        if shadow_breaking_candles.first_valid_index() < close_breaking_candles.first_valid_index():
+                            print("PBOS #", latest_pbos.name, "broken by candle shadow at index", shadow_breaking_candles.first_valid_index())
+                            self.pbos_indices.append(shadow_breaking_candles.first_valid_index())
+
+                        # Otherwise, if a candle breaks the PBOS with its close price, register a new PBOSRegion object, basically
+                        # ending the search for a PBOS
+                        else:
+                            print("Candle at index",
+                                  close_breaking_candles.first_valid_index(), "broke the last PBOS #", latest_pbos.name, "with its close price")
+
+                            pbos_type = current_pivot.pivot_type
+
+                            pbos_region = PBOSRegion.create(self.pbos_indices[0], self.pbos_indices[-1], close_breaking_candles.first_valid_index(),
+                                                            pbos_type)
+
+                            # To find the inverse of the PBOS, which makes the middle point of the h_o zigzag between the PBOS region start and end,
+                            # we need to find the lowest valley between the two peaks (for peak PBOS's) or
+                            # the highest peak between the two valleys (for valley PBOS's)
+                            inverse_pivot_type = "valley" if pbos_type == "peak" else "peak"
+
+                            # h_o_inverse_pivots is a list of all the peaks/valleys, which we later find the max/min from in
+                            # minmax_inverse_pivot_value_row
+                            h_o_inverse_pivots = self.zigzag_df[
+                                (self.zigzag_df.pair_df_index >= self.pbos_indices[0])
+                                & (self.zigzag_df.pair_df_index <= close_breaking_candles.first_valid_index())
+                                & (self.zigzag_df.pivot_type == inverse_pivot_type)]
+
+                            if inverse_pivot_type == "peak":
+                                region_inverse_pivot = h_o_inverse_pivots.loc[h_o_inverse_pivots['pivot_value'].idxmax()]
+                            else:
+                                region_inverse_pivot = h_o_inverse_pivots.loc[h_o_inverse_pivots['pivot_value'].idxmin()]
+
+                            self.h_o_indices.append(pbos_region.start_pbos)
+                            self.h_o_indices.append(region_inverse_pivot.pair_df_index)
+                            # self.pbos_indices = []
+                            break
+
+                    elif shadow_breaking_candles.first_valid_index() is None:
+                        print("No more candles found. Breaking...")
+                        break
+
+                break
+        # lpl_s_df: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index.isin(lpl_s_indices)].copy()
+        # lpl_l_df: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index.isin(lpl_l_indices)].copy()
+        #
+        # lpls_df: pd.DataFrame = pd.concat([lpl_s_df, lpl_l_df], axis=0).iloc[:-1]
+        # lpls_df.sort_values(by='pair_df_index', inplace=True)
+        # return lpls_df
