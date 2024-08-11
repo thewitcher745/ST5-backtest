@@ -380,3 +380,94 @@ def find_lplbs(bos_df: pd.DataFrame, zigzag_df: pd.DataFrame) -> pd.DataFrame:
     return zigzag_df.iloc[lplb_indices]
 
 # def calculate_FVG_from_candles(candles: ) -> Tuple:
+
+def find_longest_chain(values: pd.Series, direction: str = 'ascending') -> int:
+    """
+        Finds the longest chain of ascending or descending values in a list, starting at the first index
+
+        Parameters:
+        values (pd.Series): The list of values to search.
+        direction (str): The direction to search for. Can be 'ascending' or 'descending'.
+
+        Returns:
+        int: The end index of the longest chain.
+    """
+
+    values_list = values.to_list()
+
+    # Initialize the end_index as 0
+    end_index = 0
+
+    # Store the first value in the list
+    last_value = values_list[0]
+
+    # Iterate over the rest of the values in the list
+    for i, value in enumerate(values_list[1:]):
+        # If the current value is greater than the last value, and we're looking for an ascending chain
+        # Or if the current value is less than the last value, and we're looking for a descending chain
+        if (value > last_value and direction == 'ascending') or (value < last_value and direction == 'descending'):
+            # Update the end index of the longest chain
+            end_index = i + 1
+            # Update the last value
+            last_value = value
+        else:
+            # If the current value breaks the chain, return the longest chain found so far
+            return end_index
+
+    return end_index
+
+
+def find_ascending_valleys(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> OneDChain:
+    """
+        Function to find the longest chain of higher lows in a zigzag DataFrame.
+        It starts from a given index and goes forward, looking for valleys with ascending pivot values.
+        It stops once it finds a lower low than the previous.
+
+        Parameters:
+        zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
+        start_pair_df_index (int): The index to start the search from.
+
+        Returns:
+        OneDChain: A one directional chain object representing the chain found
+    """
+
+    # If the selected start_index isn't a valley, throw an error
+    if zigzag_df[zigzag_df.pair_df_index == start_pair_df_index].iloc[0].pivot_type != 'valley':
+        raise ValueError('The start index must be a valley.')
+
+    # The slice of the zigzag_df dataframe that needs to be searched
+    search_window: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index >= start_pair_df_index]
+
+    search_window_valleys: pd.Series = search_window[search_window.pivot_type == 'valley'].pivot_value
+
+    chain_length: int = find_longest_chain(search_window_valleys, 'ascending')
+
+    return OneDChain.create(chain_length, start_pair_df_index, 'ascending')
+
+
+def find_descending_peaks(zigzag_df: pd.DataFrame, start_pair_df_index: int) -> OneDChain:
+    """
+        Function to find the longest chain of lower highs in a zigzag DataFrame.
+        It starts from a given index and goes forward, looking for peaks with descending pivot values.
+        It stops once it finds a higher high than the previous.
+
+        Parameters:
+        zigzag_df (pd.DataFrame): The DataFrame containing the zigzag data.
+        start_pair_df_index (int): The index to start the search from.
+
+        Returns:
+        OneDChain: A one directional chain object representing the chain found
+    """
+
+    # If the selected start_index isn't a valley, throw an error
+    if zigzag_df[zigzag_df.pair_df_index == start_pair_df_index].iloc[0].pivot_type != 'peak':
+        raise ValueError('The start index must be a peak.')
+
+    # The slice of the zigzag_df dataframe that needs to be searched
+    search_window: pd.DataFrame = zigzag_df[zigzag_df.pair_df_index >= start_pair_df_index]
+
+    search_window_peaks: pd.Series = search_window[search_window.pivot_type == 'peak'].pivot_value
+
+    chain_length: int = find_longest_chain(search_window_peaks, 'descending')
+
+    return OneDChain.create(chain_length, start_pair_df_index, 'descending')

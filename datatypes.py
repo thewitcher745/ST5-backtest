@@ -6,7 +6,7 @@ import general_utils as gen_utils
 
 
 class Candle(NamedTuple):
-    pair_df_index: int
+    pdi: int
     time: datetime
     open: float
     high: float
@@ -22,7 +22,7 @@ class Candle(NamedTuple):
 
 
 class Pivot(NamedTuple):
-    pair_df_index: int
+    pdi: int
     time: datetime
     pivot_value: float
     pivot_type: str
@@ -34,7 +34,7 @@ class Pivot(NamedTuple):
             pivot_type: str = pivot[1]
             pivot_value: float = pivot_candle.high if pivot_type == 'peak' else pivot_candle.low
 
-            return Pivot(pivot_candle.pair_df_index, pivot_candle.time, pivot_value, pivot_type)
+            return Pivot(pivot_candle.pdi, pivot_candle.time, pivot_value, pivot_type)
 
         else:
             return Pivot(pivot.pair_df_index, pivot.time, pivot.pivot_value, pivot.pivot_type)
@@ -53,7 +53,7 @@ class Leg(NamedTuple):
     def create(pivot_1: Pivot, pivot_2: Pivot):
         leg_type = 'bullish' if pivot_1.pivot_value < pivot_2.pivot_value else 'bearish'
 
-        return Leg(pivot_1.pair_df_index, pivot_2.pair_df_index, pivot_1.time, pivot_2.time, pivot_1.pivot_value, pivot_2.pivot_value,
+        return Leg(pivot_1.pdi, pivot_2.pdi, pivot_1.time, pivot_2.time, pivot_1.pivot_value, pivot_2.pivot_value,
                    leg_type)
 
 
@@ -67,23 +67,23 @@ class OneDChain(NamedTuple):
         return OneDChain(chain_length, start_pair_df_index, direction)
 
 
-class PBOSRegion(NamedTuple):
-    start_pbos: int
-    end_pbos: int
-    closing_candle: int
-    pbos_type: str
-
-    @staticmethod
-    def create(start_pbos: int, end_pbos: int, closing_candle: int, pbos_type: str):
-        return PBOSRegion(start_pbos, end_pbos, closing_candle, pbos_type)
+# class PBOSRegion(NamedTuple):
+#     start_pair_df_index: int
+#     end_pair_df_index: int
+#     closing_candle: int
+#     pbos_type: str
+#
+#     @staticmethod
+#     def create(start_pbos: int, end_pbos: int, closing_candle: int, pbos_type: str):
+#         return PBOSRegion(start_pbos, end_pbos, closing_candle, pbos_type)
 
 
 class Box:
     def __init__(self, base_candle: Candle, box_type: str):
-        self.start_index = base_candle.pair_df_index
+        self.start_index = base_candle.pdi
         self.base_candle = base_candle
         self.type = box_type
-        self.id = f"{base_candle.pair_df_index}/" + gen_utils.convert_timestamp_to_readable(base_candle.time)
+        self.id = f"{base_candle.pdi}/" + gen_utils.convert_timestamp_to_readable(base_candle.time)
         self.id += "L" if box_type == "long" else "S"
 
         self.top = base_candle.high

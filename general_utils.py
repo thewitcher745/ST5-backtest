@@ -2,6 +2,7 @@ from typing import Union, List, Tuple
 import pandas as pd
 import plotly.graph_objects as go
 
+
 # from algorithm_utils import Box
 
 
@@ -13,7 +14,7 @@ def load_local_data(hdf_path: str = './cached_data/XEMUSDT.hdf5') -> pd.DataFram
 
 
 class PlottingTool:
-    def __init__(self, x_axis_type='index'):
+    def __init__(self, x_axis_type='index', width=800, height=600):
         self.fig = go.Figure()
         self.x_axis_type = x_axis_type
         self.number_drawn_ranges = 0
@@ -28,6 +29,15 @@ class PlottingTool:
                                  'LightCyan',
                                  'LightGoldenrod',
                                  'LightSeaGreen']
+
+        # Set the size of the plotting frame
+        self.fig.update_layout(
+            width=width,
+            height=height
+        )
+
+    def save_plot(self, scale=1):
+        self.fig.write_image("./plot.png", format="png", scale=scale)
 
     def draw_candlesticks(self, df) -> None:
         # Set the candlestick data to be plotted from the time values instead of pair_df_indices if the x_axis_type is time
@@ -46,7 +56,7 @@ class PlottingTool:
     def draw_zigzag(self, zigzag_df, title='Zigzag', color='royalblue') -> None:
         # Set the zigzag data to be plotted from the time values instead of pair_df_indices if the x_axis_type is time
 
-        zigzag_x_data = zigzag_df.pair_df_index
+        zigzag_x_data = zigzag_df.pdi
         if self.x_axis_type == 'time':
             zigzag_x_data = zigzag_df.time
 
@@ -97,18 +107,17 @@ class PlottingTool:
                     line_width=0,
                 )
 
-    def draw_points_with_label(self, x_data: list, y_data: list, label: str, color=None, draw_line=False):
+    def draw_points_with_label(self, x_data: list, y_data: list, label: str, color="black", draw_line=False):
         # Plot the zigzag with the entered or default parameters
-        if not color:
-            if label == "PBOS" or label == "BOS":
-                color = "red"
-            elif label == "LPL":
-                color = "yellow",
-            elif label == "LPLB":
-                color = "orange"
-            else:
-                color = "purple"
-
+        # if not color:
+        #     if label == "PBOS" or label == "BOS":
+        #         color = "red"
+        #     elif label == "LPL":
+        #         color = "yellow",
+        #     elif label == "LPLB":
+        #         color = "orange"
+        #     else:
+        #         color = "purple"
 
         # positions = ["top center" if point_type == "peak" else "bottom center" for point_type in points_df.pivot_type.tolist()]
 
@@ -156,6 +165,7 @@ class PlottingTool:
                                xaxis_rangeslider_visible=False)
 
         self.fig.show()
+
 
 def convert_timestamp_to_readable(timestamp: pd.Timestamp):
     utc = timestamp.to_pydatetime()
