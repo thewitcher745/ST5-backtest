@@ -420,25 +420,26 @@ class Algo:
                 else:
                     mid_region_pivot = mid_region_pivots_of_type.loc[mid_region_pivots_of_type['pivot_value'].idxmin()]
 
-                last_region_lpl_pdi = self.__find_last_mid_region_lpl(mid_region_pivot, lpls_df, breaking_pdi)
-                last_mid_region_chain_lpl_pdi = self.__find_last_lpl_in_chain(last_region_lpl_pdi, lpls_df)
-                last_region_lpl_next_pivot_pdi = self.__find_relative_pivot(last_mid_region_chain_lpl_pdi, 1)
-
                 # Finally, after the LPL has been found, the highest point between the first LPL and the last BOS is set
                 # as the last point in the region
-                print("Looking for last HO pivot in range", last_region_lpl_pdi, last_region_lpl_next_pivot_pdi)
+                same_type_broken_lpls = self.valley_broken_lpls if pbos_type == "peak" else self.peak_broken_lpls
+                first_broken_lpl_after_closing_pdi = same_type_broken_lpls[same_type_broken_lpls.pdi > breaking_pdi].iloc[0].pdi
+                first_breaking_lpl_after_closing_pdi = self.__find_relative_pivot(first_broken_lpl_after_closing_pdi, 2)
+
                 mid_region_pivot_pdi = mid_region_pivot.pdi
+                print("Looking for last HO pivot in range", mid_region_pivot_pdi, first_breaking_lpl_after_closing_pdi)
 
                 if pbos_type == "peak":
                     last_region_point_idx = self.zigzag_df[
                         (mid_region_pivot_pdi <= self.zigzag_df.pdi) & (
-                                self.zigzag_df.pdi <= last_region_lpl_next_pivot_pdi)].pivot_value.idxmax()
+                                self.zigzag_df.pdi <= first_breaking_lpl_after_closing_pdi)].pivot_value.idxmax()
                 else:
                     last_region_point_idx = self.zigzag_df[
                         (mid_region_pivot_pdi <= self.zigzag_df.pdi) & (
-                                self.zigzag_df.pdi <= last_region_lpl_next_pivot_pdi)].pivot_value.idxmin()
+                                self.zigzag_df.pdi <= first_breaking_lpl_after_closing_pdi)].pivot_value.idxmin()
 
                 last_region_point_pdi = self.zigzag_df.iloc[last_region_point_idx].pdi
+                print("Last region point is: ", last_region_point_pdi)
 
                 self.h_o_indices.append(mid_region_pivot.pdi)
                 self.h_o_indices.append(last_region_point_pdi)
