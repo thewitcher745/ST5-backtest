@@ -132,13 +132,13 @@ class Algo:
             if len(window) < 4:
                 return False
 
-            return (window.iloc[0] < window.iloc[2]) and (window.iloc[0] < window.iloc[1]) and (window.iloc[1] < window.iloc[3])
+            return (window.iloc[0] <= window.iloc[2]) and (window.iloc[0] <= window.iloc[1]) and (window.iloc[1] <= window.iloc[3])
 
         def check_peak_lpl_order(window):
             if len(window) < 4:
                 return False
 
-            return (window.iloc[0] > window.iloc[2]) and (window.iloc[0] > window.iloc[1]) and (window.iloc[1] > window.iloc[3])
+            return (window.iloc[0] >= window.iloc[2]) and (window.iloc[0] >= window.iloc[1]) and (window.iloc[1] >= window.iloc[3])
 
         # Bullish LPL's
         valley_lpl_windows = self.zigzag_df.pivot_value.rolling(4).apply(check_valley_lpl_order, raw=False).shift(-1)
@@ -174,7 +174,13 @@ class Algo:
                 peak_broken_lpl_indices.append(lpl_pdi)
 
         self.peak_broken_lpls = self.peak_lpls[self.peak_lpls.pdi.isin(peak_broken_lpl_indices)]
+        mask = ~self.peak_broken_lpls.index.isin(self.peak_broken_lpls.index - 2)
+        self.peak_broken_lpls = self.peak_broken_lpls[mask]
+
         self.valley_broken_lpls = self.valley_lpls[self.valley_lpls.pdi.isin(valley_broken_lpl_indices)]
+        mask = ~self.valley_broken_lpls.index.isin(self.valley_broken_lpls.index - 2)
+        self.valley_broken_lpls = self.valley_broken_lpls[mask]
+
         self.broken_lpls = pd.concat([self.peak_broken_lpls, self.valley_broken_lpls]).sort_values("pdi")
 
     def __find_relative_pivot(self, pivot_pdi: int, delta: int) -> int:
