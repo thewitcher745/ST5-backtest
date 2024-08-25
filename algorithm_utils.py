@@ -1,6 +1,6 @@
 from typing import Optional
-
 import pandas as pd
+from intervals import Interval, IllegalArgument, AbstractInterval
 
 from datatypes import *
 
@@ -33,6 +33,10 @@ class Algo:
         # executed in the calc_h_o_zigzag method.
         self.starting_pdi = 0
         self.candles_starting_idx = 0
+
+        # A list of FVG's in the entire pair_df dataframe, which will get populated by the identify_fvgs method with the
+        # FVG object from datatypes.py
+        self.fvg_list = []
 
     def init_zigzag(self) -> None:
         """
@@ -474,3 +478,78 @@ class Algo:
                 break
 
         return
+
+    def identify_fvgs(self):
+        """
+        This method identifies and stores the Fractal Volatility Gaps (FVGs) in the pair DataFrame.
+
+        An FVG is a gap between two candles that is not filled by the body of a third candle. This method calculates FVGs by creating a rolling window of 3 candles at a time and checking for the existence of an FVG in each window.
+
+        If an FVG is found, it is added to the `fvg_list` attribute of the class instance.
+
+        Note: This method does not return anything.
+        """
+
+        def calc_fvg(candles_df) -> Union[None, AbstractInterval]:
+            """
+            This helper function calculates the FVG for a given window of 3 candles.
+
+            It first creates intervals for each candle's range (high to low) and body (open to close). It then checks if there is an overlap between
+            the first and third candle. If there is, it returns None as there is no FVG.
+
+            If there is no overlap, it calculates the gap between the first and third candle and calculates the intersection of the gap with the
+            second candle's body. THe intersection is the FVG.
+
+            Parameters:
+            candles_df (pd.DataFrame): A DataFrame containing 3 consecutive candles.
+
+            Returns:
+            AbstractInterval: An interval representing the FVG, or None if there is no FVG.
+            """
+
+            # Get each candle from the DataFrame
+            candle1 = candles_df.iloc[0]
+            candle2 = candles_df.iloc[1]
+            candle3 = candles_df.iloc[2]
+
+            # Create intervals for each candle's range and body
+            candle1_interval: AbstractInterval = Interval([candle1.low, candle1.high])
+            candle2_body_interval: AbstractInterval = Interval([min(candle2.open, candle2.close), max(candle2.open, candle2.close)])
+            candle3_interval: AbstractInterval = Interval([candle3.low, candle3.high])
+
+            try:
+                # Check for overlap between the first and third candle
+                overlap = candle1_interval & candle3_interval
+                return None
+
+            except IllegalArgument:
+                # If there is no overlap, calculate the gap
+                if candle1.high < candle3.low:
+                    gap = Interval([candle1.high, candle3.low])
+                elif candle1.low >= candle3.high:
+                    gap = Interval([candle3.high, candle1.low])
+                else:
+                    return None
+
+                try:
+                    # Check if the second candle's body fills the gap
+                    fvg: AbstractInterval = candle2_body_interval & gap
+                    return fvg
+
+                except IllegalArgument:
+                    return None
+
+        # Create a rolling window of 3 candles
+        windows = self.pair_df.rolling(3)
+
+        for window in windows:
+            # Skip windows with less than 3 candles
+            if len(window) < 3:
+                continue
+
+            # Calculate the FVG for the current window
+            fvg = calc_fvg(window)
+
+            # If there is an FVG, add it to the list
+            if fvg is not None:
+                self.fvg_list.append(FVG(middle_candle=window.iloc[1].name, fvg_lower=float(fvg.lower), fvg_upper=float(fvg.upper)))
