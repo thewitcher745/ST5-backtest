@@ -67,6 +67,12 @@ class OneDChain(NamedTuple):
         return OneDChain(chain_length, start_pair_df_index, direction)
 
 
+class FVG(NamedTuple):
+    middle_candle: int
+    fvg_lower: float
+    fvg_upper: float
+
+
 # class PBOSRegion(NamedTuple):
 #     start_pair_df_index: int
 #     end_pair_df_index: int
