@@ -376,9 +376,13 @@ class Algo:
                 extremum_type = "lowest low" if trend_type == "ascending" else "highest high"
                 log_message("Added extremum of type", extremum_type, "at", extremum_pivot.pdi, v=1)
 
-                # Now, we can restart finding HO pivots, with the extremum point set as the starting point. Trend stays the same since no CHOCH
-                # has occurred
-                pattern_start_pdi = extremum_pivot.pdi
+                # Now, we can restart finding HO pivots. Starting point is set to the last LPL of the same type BEFORE the BOS breaking candle.
+                # Trend stays the same since no CHOCH has occurred.
+                pivot_type = "valley" if trend_type == "ascending" else "peak"
+                pivots_of_type_before_closing_candle = self.zigzag_df[(self.zigzag_df.pivot_type == pivot_type)
+                                                                      & (self.zigzag_df.pdi <= breaking_pdi)]
+
+                pattern_start_pdi = pivots_of_type_before_closing_candle.iloc[-1].pdi
                 log_message("Setting pattern start to", pattern_start_pdi, v=1)
 
                 # Essentially reset the algorithm
@@ -393,7 +397,12 @@ class Algo:
 
                 trend_type = "ascending" if trend_type == "descending" else "descending"
 
-                pattern_start_pdi = self.h_o_indices[-1]
+                # Set the pattern start to the last inverse pivot BEFORE the closing candle
+                pivot_type = "valley" if trend_type == "ascending" else "peak"
+                pivots_of_type_before_closing_candle = self.zigzag_df[(self.zigzag_df.pivot_type == pivot_type)
+                                                                      & (self.zigzag_df.pdi <= breaking_pdi)]
+
+                pattern_start_pdi = pivots_of_type_before_closing_candle.iloc[-1].pdi
                 log_message("Setting pattern start to", pattern_start_pdi, v=1)
 
                 # Essentially reset the algorithm
