@@ -32,3 +32,15 @@
 - Updated breaking sentiment detection, implemented CHOCH detection
 - Updated main loop to now run indefinitely, until stopped by an error or when no closing candles are found
 - Temporarily disabled pattern_count functionality
+
+### ver b0.41
+- Broken LPL detection now omits consecutive broken LPL's, and only registers the last on in the chain
+- Finding the last HO zigzag pivot in the mid region now uses a different method. Previously it extended the last LPL in the region and selected a new pivot right after. In the updated version, the new ending pivot is selected by finding the lowest point between the mid-region pivot and the first "breaking" LPL (of the correct type) after the closing candle
+
+### ver b0.5
+- Broken LPL detection now uses completely new algorithm. most recent highs and lows are recorded, an LPL is registered only when a highest high is broken. if a lowest low is broken, it is recorded as a broken LPL and a completely new LPL chain is initialized.
+- Pattern continuation changed, now a BOS update causes an extremum (lowest low or highest high) and the pattern restarts from there. A CHOCH causes the pattern to restart with the last BOS being the starting point, effectively flipping the direction.
+- Logging implemented, now can output to file and stdout with settable allowed verbosity levels in constants.py
+- Broken LPL algorithm changed and optimized, now doesn't try to detect all broken LPL's, only starts at one point and detects the first broken LPL. This causes the search to only continue up to the point that we need, not further, majorly improving performance.
+- detect_breaking_statement now also accounts for CHOCH_SHADOW case for extending and updating the CHOCH threshold from the original HO zigzag pivot. Also improved the performance and simplified the logic of the function.
+- 
