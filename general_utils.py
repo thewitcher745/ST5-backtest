@@ -1,16 +1,32 @@
 from typing import Union, List, Tuple
 import pandas as pd
 import plotly.graph_objects as go
+import constants
 
 
 # from algorithm_utils import Box
 
 
-def load_local_data(hdf_path: str = './cached_data/XEMUSDT.hdf5') -> pd.DataFrame:
+def load_local_data(hdf_path: str = './cached_data/BTCUSDT.hdf5') -> pd.DataFrame:
     pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
     pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
     # Use pandas to read the hdf5 file
     return pair_df
+
+
+def reset_logs():
+    open("logs.txt", "w")
+
+
+def log_message(*messages, v: int = 3) -> None:
+    if v <= constants.allowed_verbosity:
+        print(messages)
+        with open("logs.txt", "a") as fs:
+            for message in messages:
+                fs.write(str(message))
+                fs.write(" ")
+
+            fs.write("\n")
 
 
 class PlottingTool:
@@ -154,6 +170,16 @@ class PlottingTool:
             layer="above",
             line_width=0,
         )
+
+    def draw_fvg_box(self, fvg):
+        self.fig.add_shape(type="rect",
+                           x0=fvg.middle_candle - 1,
+                           y0=fvg.fvg_lower,
+                           x1=fvg.middle_candle + 1,
+                           y1=fvg.fvg_upper,
+                           fillcolor="blue",
+                           opacity=0.5,
+                           name="FVG")
 
     def show(self, title: str = 'Price Chart',
              xaxis_title: str = 'Date',
