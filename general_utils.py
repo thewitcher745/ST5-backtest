@@ -62,7 +62,7 @@ class PlottingTool:
     def save_plot(self, scale=1):
         self.fig.write_image("./plot.png", format="png", scale=scale)
 
-    def draw_candlesticks(self, df) -> None:
+    def draw_candlesticks(self, df, label="Candlestick") -> None:
         # Set the candlestick data to be plotted from the time values instead of pair_df_indices if the x_axis_type is time
         candlestick_x_data = df.index
         if self.x_axis_type == 'time':
@@ -73,7 +73,7 @@ class PlottingTool:
                                           high=df['high'],
                                           low=df['low'],
                                           close=df['close'],
-                                          name='Candlestick')
+                                          name=label)
                            )
 
     def draw_zigzag(self, zigzag_df, title='Zigzag', color='royalblue') -> None:
