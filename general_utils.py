@@ -7,10 +7,17 @@ import constants
 # from algorithm_utils import Box
 
 
-def load_local_data(hdf_path: str = './cached_data/BTCUSDT.hdf5') -> pd.DataFrame:
+def load_local_data(hdf_path: str = './cached_data/BTCUSDT-15m.hdf5') -> pd.DataFrame:
     pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
     pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
-    # Use pandas to read the hdf5 file
+
+    return pair_df
+
+
+def load_higher_tf_data(hdf_path: str = './cached_data/BTCUSDT-4h.hdf5') -> pd.DataFrame:
+    pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
+    pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
+
     return pair_df
 
 
@@ -18,8 +25,8 @@ def reset_logs():
     open("logs.txt", "w")
 
 
-def log_message(*messages, v: int = 3) -> None:
-    if v <= constants.allowed_verbosity:
+def log_message(*messages, v: int = 3, av=constants.allowed_verbosity) -> None:
+    if v <= av:
         print(messages)
         with open("logs.txt", "a") as fs:
             for message in messages:
