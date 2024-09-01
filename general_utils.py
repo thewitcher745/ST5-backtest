@@ -130,7 +130,7 @@ class PlottingTool:
                     line_width=0,
                 )
 
-    def draw_points_with_label(self, x_data: list, y_data: list, label: str, color="black", draw_line=False):
+    def draw_points_with_label(self, x_data: list, y_data: list, label: str="", color="black", draw_line=False):
         # Plot the zigzag with the entered or default parameters
         # if not color:
         #     if label == "PBOS" or label == "BOS":
