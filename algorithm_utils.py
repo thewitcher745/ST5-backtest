@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, NamedTuple
 import pandas as pd
 from intervals import Interval, IllegalArgument, AbstractInterval
 
@@ -35,7 +35,7 @@ class Algo:
     def log_message(self, *messages, v=3):
         log_message_general(*messages, v=v, av=self.allowed_verbosity)
 
-    def init_zigzag(self) -> None:
+    def init_zigzag(self, last_pivot_type=None, last_pivot_candle_pdi=None) -> None:
         """
             Method to identify turning points in a candlestick chart.
             It compares each candle to its previous pivot to determine if it's a new pivot point.
@@ -46,13 +46,20 @@ class Algo:
             pd.DataFrame: A DataFrame containing the identified turning points.
             """
 
-        # Find the first candle that has a higher high or a lower low than its previous candle
-        # and set it as the first pivot. Also set the type of the pivot (peak or valley)
-        last_pivot_candle_series = \
-            self.pair_df[(self.pair_df['high'] > self.pair_df['high'].shift(1)) | (self.pair_df['low'] < self.pair_df['low'].shift(1))].iloc[0]
-        last_pivot_type: str = 'valley'
-        if last_pivot_candle_series.high > self.pair_df.iloc[last_pivot_candle_series.name - 1].high:
-            last_pivot_type = 'peak'
+        if last_pivot_type is None:
+            # Find the first candle that has a higher high or a lower low than its previous candle
+            # and set it as the first pivot. Also set the type of the pivot (peak or valley)
+
+            last_pivot_candle_series = \
+                self.pair_df[(self.pair_df['high'] > self.pair_df['high'].shift(1)) | (self.pair_df['low'] < self.pair_df['low'].shift(1))].iloc[0]
+
+            last_pivot_type: str = 'valley'
+            if last_pivot_candle_series.high > self.pair_df.iloc[last_pivot_candle_series.name - 1].high:
+                last_pivot_type = 'peak'
+
+        # If a first candle is already given
+        else:
+            last_pivot_candle_series = self.pair_df.loc[last_pivot_candle_pdi]
 
         last_pivot_candle: Candle = Candle.create(last_pivot_candle_series)
         pivots: List[Pivot] = []
@@ -412,7 +419,7 @@ class Algo:
 
                 break
 
-        return self.h_o_indices
+        # return self.h_o_indices
 
     def identify_fvgs(self):
 
@@ -489,3 +496,83 @@ class Algo:
             # If there is an FVG, add it to the list
             if fvg is not None:
                 self.fvg_list.append(FVG(middle_candle=window.iloc[1].name, fvg_lower=float(fvg.lower), fvg_upper=float(fvg.upper)))
+
+
+def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
+                           ltf_start_time: pd.Timestamp,
+                           backtrack_window: int = constants.starting_point_backtrack_window) -> tuple[pd.Timestamp, str]:
+    """
+    This function returns a starting point for the algorithm. It uses the algo object (kind of recursively) with a higher order pair_df and applies
+    a higher order zigzag operator on it. The last point of the higher order zigzag before the original LTF data's starting point is set as the
+    starting timestamp for LTF data, and the data is reshaped to account for it
+
+    Parameters:
+        htf_pair_df (pd.Dataframe): A dataframe containing the higher timeframe data
+        ltf_start_time (pd.Timestamp): A timestamp of the beginning of the lower timeframe data
+        backtrack_window (int): The size of the backtracking performed from the beginning of the original lower timeframe data.
+
+    Returns:
+        tuple: A tuple containing both the Timestamp of the last HO pivot before the LTF original starting point, and a str indicating if it's a low
+               or a high
+    """
+
+    # Instantiate the Algo object so the functions can be used.
+    truncated_htf_pair_df: pd.DataFrame = htf_pair_df.iloc[-backtrack_window:].reset_index()
+
+    htf_algo = Algo(truncated_htf_pair_df, "HTF Data", allowed_verbosity=0)
+    htf_algo.init_zigzag()
+    first_zigzag_pivot_pdi: int = htf_algo.zigzag_df.iloc[0].pdi
+    htf_algo.calc_h_o_zigzag(first_zigzag_pivot_pdi)
+    htf_h_o_indices = htf_algo.h_o_indices
+
+    # Convert the h_o_indices of the higher timeframe data to their respective timestamps
+    timestamps = htf_algo.zigzag_df[htf_algo.zigzag_df.pdi.isin(htf_h_o_indices)]
+
+    # Select the timestamps before the lower timeframe data's starting point
+    timestamps = timestamps[timestamps.time <= ltf_start_time]
+
+    # The last one along with its type
+    last_timestamp = timestamps.iloc[-1].time
+    pivot_type = "low" if htf_algo.zigzag_df[htf_algo.zigzag_df.time == last_timestamp].iloc[0].pivot_type == "valley" else "high"
+
+    return last_timestamp, pivot_type
+
+
+def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFrame,
+                                                          initial_data_start_time: pd.Timestamp,
+                                                          original_pair_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    This function created a new pair_df using the starting timestamp found by find_last_htf_ho_pivot. It then determines whether it's a low or a high,
+    and processes the data aggregated by the higher order timeframe to find the actual starting candle
+
+    Parameters:
+        htf_pair_df (pd.DataFrame): The higher timeframe DataFrame
+        initial_data_start_time (pd.Timestamp): The start date of the uncorrected pair_df
+        original_pair_df (pd.DataFrame): The complete, non-truncated version of pair_df which is used to filter the candles to create the
+        final pair_df.
+
+    Returns:
+        pd.DataFrame: The filtered, corrected pair_df, ready for use in the algorithm
+    """
+
+    starting_point_output = find_last_htf_ho_pivot(htf_pair_df, initial_data_start_time)
+    starting_timestamp, starting_pivot_type = starting_point_output
+
+    # The PDI of the candle in the LTF data which corresponds to the exact time found by find_last_htf_ho_pivot. This will be used to create the
+    # aggregated candles and find the lowest low/highest high candle depending on starting_pivot_type and filtering pair_df based on that.
+    initial_starting_pdi = original_pair_df[original_pair_df.time == starting_timestamp].iloc[0].name
+
+    # This parameter actually depends on the conversion rate between the LTF and HTF timeframes, but as a temporary, naive fix it is now hard coded.
+    n_aggregated_candles = 16
+    # The n_aggregated_candles-long window to find the lowest low/highest high.
+    pair_df_window = original_pair_df.iloc[initial_starting_pdi + 1:initial_starting_pdi + n_aggregated_candles + 1]
+    print(starting_point_output)
+    print(pair_df_window)
+    if starting_pivot_type == "low":
+        starting_extremum_candle_pdi = pair_df_window.loc[pair_df_window.low.idxmin()].name
+    else:
+        starting_extremum_candle_pdi = pair_df_window.loc[pair_df_window.high.idxmax()].name
+    print(starting_extremum_candle_pdi)
+    pair_df = original_pair_df.iloc[starting_extremum_candle_pdi:].reset_index()
+
+    return pair_df
