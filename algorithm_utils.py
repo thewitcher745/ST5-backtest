@@ -3,6 +3,7 @@ import pandas as pd
 from intervals import Interval, IllegalArgument, AbstractInterval
 
 from datatypes import *
+from general_utils import log_message
 
 
 class Algo:
@@ -14,8 +15,9 @@ class Algo:
         # This variable indicates whether only the first pattern is generated, for testing purposes
         self.pattern_limit = pattern_limit
 
-        # pbos_indices is a list which stores the PBOS's being moved due to shadows breaking the most recent PBOS
+        # pbos_indices and choch_indices is a list which stores the PBOS and CHOCH's being moved due to shadows breaking the most recent lows/highs
         self.pbos_indices = []
+        self.choch_indices = []
 
         # h_o_indices indicates the indices of the peaks and valleys in the higher order zigzag
         self.h_o_indices = []
@@ -44,9 +46,6 @@ class Algo:
             It compares each candle to its previous pivot to determine if it's a new pivot point.
             This implementation is less optimized than the deprecated version, as it doesn't use
             vectorized operations, but it is what it is
-
-            Parameters:
-            pair_df (pd.DataFrame): The input DataFrame containing the candlestick data.
 
             Returns:
             pd.DataFrame: A DataFrame containing the identified turning points.
@@ -120,73 +119,6 @@ class Algo:
 
         self.zigzag_df = zigzag_df
 
-    def calc_lpls(self):
-        """
-        Calculates the Last Pivot Liquidities (LPLs) for both bullish and bearish trends.
-
-        For a bullish trend, an LPL is any instance of a valley which has a higher value than the one before it, and has a higher high right after.
-        For a bearish trend, an LPL is any instance of a peak which has a lower value than the one before it, and has a lower low right after.
-
-        The method updates the instance variables `valley_lpls` and `peak_lpls` with the calculated LPLs.
-
-        Note: This method does not return anything.
-        """
-
-        def check_valley_lpl_order(window):
-            if len(window) < 4:
-                return False
-
-            return (window.iloc[0] <= window.iloc[2]) and (window.iloc[0] <= window.iloc[1]) and (window.iloc[1] <= window.iloc[3])
-
-        def check_peak_lpl_order(window):
-            if len(window) < 4:
-                return False
-
-            return (window.iloc[0] >= window.iloc[2]) and (window.iloc[0] >= window.iloc[1]) and (window.iloc[1] >= window.iloc[3])
-
-        # Bullish LPL's
-        valley_lpl_windows = self.zigzag_df.pivot_value.rolling(4).apply(check_valley_lpl_order, raw=False).shift(-1)
-        valley_lpl_indices = valley_lpl_windows[valley_lpl_windows == 1].index
-        self.valley_lpls = self.zigzag_df.iloc[valley_lpl_indices]
-
-        # Bearish LPL's
-        peak_lpl_windows = self.zigzag_df.pivot_value.rolling(4).apply(check_peak_lpl_order, raw=False).shift(-1)
-        peak_lpl_indices = peak_lpl_windows[peak_lpl_windows == 1].index
-        self.peak_lpls = self.zigzag_df.iloc[peak_lpl_indices]
-
-    def calc_broken_lpls(self):
-        """
-        Calculates the Broken LPL's for both bullish and bearish trends.
-
-        The method updates the instance variables `valley_broken_lpls`, `peak_broken_lpls` and `broken_lpls` with the calculated broken LPLs.
-
-        Note: This method does not return anything.
-        """
-
-        # Bullish LPL's
-        valley_broken_lpl_indices = []
-        peak_broken_lpl_indices = []
-
-        for lpl_pdi, lpl_value in zip(self.valley_lpls.pdi, self.valley_lpls.pivot_value):
-            subsequent_rows = self.zigzag_df[self.zigzag_df.pdi > lpl_pdi]
-            if subsequent_rows[subsequent_rows.pivot_value < lpl_value].first_valid_index() is not None:
-                valley_broken_lpl_indices.append(lpl_pdi)
-
-        for lpl_pdi, lpl_value in zip(self.peak_lpls.pdi, self.peak_lpls.pivot_value):
-            subsequent_rows = self.zigzag_df[self.zigzag_df.pdi > lpl_pdi]
-            if subsequent_rows[subsequent_rows.pivot_value > lpl_value].first_valid_index() is not None:
-                peak_broken_lpl_indices.append(lpl_pdi)
-
-        self.peak_broken_lpls = self.peak_lpls[self.peak_lpls.pdi.isin(peak_broken_lpl_indices)]
-        mask = ~self.peak_broken_lpls.index.isin(self.peak_broken_lpls.index - 2)
-        self.peak_broken_lpls = self.peak_broken_lpls[mask]
-
-        self.valley_broken_lpls = self.valley_lpls[self.valley_lpls.pdi.isin(valley_broken_lpl_indices)]
-        mask = ~self.valley_broken_lpls.index.isin(self.valley_broken_lpls.index - 2)
-        self.valley_broken_lpls = self.valley_broken_lpls[mask]
-
-        self.broken_lpls = pd.concat([self.peak_broken_lpls, self.valley_broken_lpls]).sort_values("pdi")
-
     def __find_relative_pivot(self, pivot_pdi: int, delta: int) -> int:
         """
         Finds the relative pivot to the pivot at the given index.
@@ -204,7 +136,59 @@ class Algo:
 
         return self.zigzag_df.iloc[zigzag_idx + delta].pdi
 
-    def __detect_breaking_sentiment(self, latest_pbos_value: float, latest_pbos_pdi: int, latest_choch_value: int, pbos_type: str) -> dict:
+    def detect_first_broken_lpl(self, search_window_start_pdi: int) -> Union[None, pd.Series]:
+        """
+        Calculates the LPL's and then broken LPL's in a series of zigzag pivots.
+
+        An LPL (For ascending patterns) is registered when a higher high than the highest high since the last LPL is registered. If a lower low than
+        the lowest low is registered, the last LPL is considered a broken LPL and registered as such.
+
+        Parameters:
+        None
+
+        Returns:
+        pd.Series: a row of zigzag_df which contains the broken LPL
+        None: If no broke LPL is found
+        """
+
+        starting_pivot = self.zigzag_df[self.zigzag_df.pdi == search_window_start_pdi].iloc[0]
+        trend_type = "ascending" if starting_pivot.pivot_type == "valley" else "descending"
+        log_message(3, "Trend type is", trend_type)
+
+        # Breaking and extension pdi and values represent the values to surpass for registering a higher high (extension) of a lower low (breaking)
+        breaking_pdi = search_window_start_pdi
+        breaking_value: float = starting_pivot.pivot_value
+        extension_pdi = self.__find_relative_pivot(search_window_start_pdi, 1)
+        extension_value: float = self.zigzag_df.loc[self.zigzag_df.pdi == extension_pdi].iloc[0].pivot_value
+
+        check_start_pdi = self.__find_relative_pivot(search_window_start_pdi, 2)
+
+        for row in self.zigzag_df[self.zigzag_df.pdi > check_start_pdi].iloc[:-1].itertuples():
+            if trend_type == "ascending":
+                extension_condition = row.pivot_type == "peak" and row.pivot_value >= extension_value
+                breaking_condition = row.pivot_type == "valley" and row.pivot_value <= breaking_value
+            else:
+                extension_condition = row.pivot_type == "valley" and row.pivot_value <= extension_value
+                breaking_condition = row.pivot_type == "peak" and row.pivot_value >= breaking_value
+
+            # Breaking
+            if breaking_condition:
+                # Return the LPL which was broken to the list of valley LPL's
+                return self.zigzag_df[self.zigzag_df.pdi == breaking_pdi].iloc[0]
+
+            # Extension
+            if extension_condition:
+                # If a higher high is found, extend and update the pattern
+                prev_pivot_pdi = self.__find_relative_pivot(row.pdi, -1)
+                prev_pivot = self.zigzag_df[self.zigzag_df.pdi == prev_pivot_pdi].iloc[0]
+
+                breaking_pdi = prev_pivot.pdi
+                breaking_value = prev_pivot.pivot_value
+                extension_value = row.pivot_value
+
+        return None
+
+    def __detect_breaking_sentiment(self, latest_pbos_value: float, latest_pbos_pdi: int, latest_choch_value: float, trend_type: str) -> dict:
         """
         Detects the sentiment of the market by checking if the latest Potential BOS (PBOS) or CHOCH (Change of Character) value is broken by any
         subsequent candles.
@@ -227,117 +211,57 @@ class Algo:
         search_window: pd.DataFrame = self.pair_df.iloc[latest_pbos_pdi + 1:]
 
         # The definition of "breaking" is different whether the PBOS is a peak or a valley
-        if pbos_type == "peak":
+        if trend_type == "ascending":
             pbos_shadow_breaking_candles = search_window[search_window.high > latest_pbos_value]
             pbos_close_breaking_candles = search_window[search_window.close > latest_pbos_value]
+            choch_shadow_breaking_candles = search_window[search_window.low < latest_choch_value]
             choch_close_breaking_candles = search_window[search_window.close < latest_choch_value]
+
         else:
             pbos_shadow_breaking_candles = search_window[search_window.low < latest_pbos_value]
             pbos_close_breaking_candles = search_window[search_window.close < latest_pbos_value]
+            choch_shadow_breaking_candles = search_window[search_window.high > latest_choch_value]
             choch_close_breaking_candles = search_window[search_window.close > latest_choch_value]
 
         pbos_close_index = pbos_close_breaking_candles.first_valid_index()
         pbos_shadow_index = pbos_shadow_breaking_candles.first_valid_index()
+        choch_shadow_index = choch_shadow_breaking_candles.first_valid_index()
         choch_close_index = choch_close_breaking_candles.first_valid_index()
 
-        print("PBOS CLOSE", pbos_close_index)
-        print("PBOS SHADOW", pbos_shadow_index)
-        print("CHOCH CLOSE", choch_close_index)
+        pbos_shadow_output = {
+            "sentiment": "PBOS_SHADOW",
+            "pdi": pbos_shadow_index
+        }
+        pbos_close_output = {
+            "sentiment": "PBOS_CLOSE",
+            "pdi": pbos_close_index
+        }
+        choch_shadow_output = {
+            "sentiment": "CHOCH_SHADOW",
+            "pdi": choch_shadow_index
+        }
+        choch_close_output = {
+            "sentiment": "CHOCH_CLOSE",
+            "pdi": choch_close_index
+        }
+        none_output = {
+            "sentiment": "NONE",
+            "pdi": None
+        }
 
-        # If there isn't any candle whose shadow breaks either the CHOCH or the PBOS, take no action
-        if pbos_shadow_index is None and choch_close_index is None:
-            return {
-                "sentiment": "NONE",
-                "pdi": None
-            }
+        outputs_list: list[dict] = [pbos_shadow_output, pbos_close_output, choch_shadow_output, choch_close_output]
 
-        elif choch_close_index is None:
-            if pbos_close_index is None:
-                return {
-                    "sentiment": "PBOS_SHADOW",
-                    "pdi": pbos_shadow_index
-                }
-            else:
-                if pbos_close_index <= pbos_shadow_index:
-                    return {
-                        "sentiment": "PBOS_CLOSE",
-                        "pdi": pbos_close_index
-                    }
-                else:
-                    return {
-                        "sentiment": "PBOS_SHADOW",
-                        "pdi": pbos_shadow_index
-                    }
+        # This function sorts the outputs of the breaking sentiment analysis to determine which one is reached first using the
+        # sorted built-in function. It also prioritizes sentiments that have "CLOSE" in their description.
+        def sorting_key(output_item):
+            pdi = output_item["pdi"] if output_item["pdi"] is not None else 0
+            has_close = 1 if "CLOSE" in output_item["sentiment"] else 2
+            return pdi, has_close
 
-        elif pbos_shadow_index is None:
-            return {
-                "sentiment": "CHOCH_CLOSE",
-                "pdi": choch_close_index
-            }
+        sorted_outputs: list[dict] = [output_item for output_item in sorted(outputs_list, key=sorting_key)
+                                      if output_item["pdi"] is not None]
 
-        else:
-            if choch_close_index < pbos_shadow_index:
-                return {
-                    "sentiment": "CHOCH_CLOSE",
-                    "pdi": choch_close_index
-                }
-            else:
-                if pbos_close_index is None:
-                    return {
-                        "sentiment": "PBOS_SHADOW",
-                        "pdi": pbos_shadow_index
-                    }
-                else:
-                    if pbos_close_index <= pbos_shadow_index:
-                        return {
-                            "sentiment": "PBOS_CLOSE",
-                            "pdi": pbos_close_index
-                        }
-                    else:
-                        return {
-                            "sentiment": "PBOS_SHADOW",
-                            "pdi": pbos_shadow_index
-                        }
-
-    def __find_last_mid_region_lpl(self, mid_region_pivot: pd.Series, lpls_df: pd.DataFrame, breaking_pdi: int) -> int:
-        last_mid_region_lpl = lpls_df[(lpls_df.pdi >= mid_region_pivot.pdi) & (lpls_df.pdi <= breaking_pdi)].iloc[-1].pdi
-
-        return last_mid_region_lpl
-
-    def __find_last_lpl_in_chain(self, starting_lpl_pdi: int, lpls_df: pd.DataFrame) -> int:
-        # Finding the longest consecutive chain of LPL's including and after the starting_lpl_pdi.
-        last_found_lpl_index = lpls_df[lpls_df.pdi == starting_lpl_pdi].first_valid_index() \
-            # Continue adding +2 to the LPL pdi's, until the +2 value doesn't exist in lpls_df. Report the most recent value  as output
-        while True:
-            # The pivots are positioned as VALLEY, PEAK, VALLEY, PEAK. So if the index of the last_mid_region_lpl + 2
-            # is in lpls_df, that means there is another LPL located right after. If so, we extend the found LPL to
-            if last_found_lpl_index + 2 not in lpls_df.index:
-                break
-            else:
-                last_found_lpl_index += 2
-
-        return self.zigzag_df.iloc[last_found_lpl_index].pdi
-
-    def __init_pattern_start_pdi(self, lpls_df: pd.DataFrame):
-        """
-        Initializes the starting point of the pattern based on the DataFrame of LPL's.
-
-        The starting point is determined as the same-type pivot right before the first LPL, therefore the pivot 2 behind
-        the first LPL
-
-        The method updates the instance variables `starting_pdi` and `h_o_indices` with the calculated starting point.
-
-        Parameters:
-        lpls_df (pd.DataFrame): DataFrame containing the LPLs.
-        broken_lpl (pd.Series): Series representing the broken LPL.
-
-        Note: This method does not return anything.
-        """
-
-        first_lpl_pdi = lpls_df.iloc[0].pdi
-        print("Starting point is 2", lpls_df.iloc[0].pivot_type, "'s behind #", first_lpl_pdi)
-        self.starting_pdi = self.__find_relative_pivot(first_lpl_pdi, -2)
-        print("Starting point is at", self.starting_pdi)
+        return sorted_outputs[0] if len(sorted_outputs) > 0 else none_output
 
     def __calc_region_start_pdi(self, broken_lpl: pd.Series) -> int:
         """
@@ -355,133 +279,141 @@ class Algo:
 
         return region_start_pdi
 
-    def calc_h_o_zigzag(self) -> pd.DataFrame:
-        first_broken_lpl: pd.Series = self.broken_lpls[self.broken_lpls.pdi > self.candles_starting_idx].iloc[0]
-        broken_lpl = self.zigzag_df[self.zigzag_df.pdi == (self.__find_last_lpl_in_chain(first_broken_lpl.pdi, self.broken_lpls))].iloc[0]
-        lpls_df = self.valley_lpls.copy() if broken_lpl.pivot_type == "valley" else self.peak_lpls.copy()
-        lpls_df = lpls_df[lpls_df.pdi > self.candles_starting_idx]
-
-        print("Broken LPL is at", broken_lpl.pdi)
-        # The starting point of the zigzag is denoted as the same-type pivot right before the first LPL
-        self.__init_pattern_start_pdi(lpls_df)
-
-        region_start_pdi = self.__calc_region_start_pdi(broken_lpl)
-        # Add the first found PBOS to the list as that is needed to kickstart the h_o_zigzag
-        self.pbos_indices.append(region_start_pdi)
-
-        # Add the first two points to the h_o zigzag
+    def calc_h_o_zigzag(self, starting_point_pdi) -> pd.DataFrame:
+        # Set the starting point of the HO zigzag and add it
+        self.starting_pdi = starting_point_pdi
         self.h_o_indices.append(self.starting_pdi)
-        self.h_o_indices.append(region_start_pdi)
+        latest_choch_pdi = self.starting_pdi
+        latest_choch_threshold: float = self.zigzag_df[self.zigzag_df.pdi == self.starting_pdi].iloc[0].pivot_value
+        log_message("Added starting point", self.starting_pdi, v=1)
 
-        # If the LPL type is valley, it means the PBOS's are peak, and vice versa
-        pbos_type = "valley" if broken_lpl.pivot_type == "peak" else "peak"
+        pattern_start_pdi = self.starting_pdi
+
+        latest_pbos_pdi = None
+        latest_pbos_threshold = None
 
         while True:
-            latest_pbos_pdi = self.pbos_indices[-1] if len(self.pbos_indices) > 0 else self.h_o_indices[-1]
-            latest_pbos_candle = self.pair_df.iloc[latest_pbos_pdi]
+            log_message("", v=1)
+            # Find the first broken LPL after the starting point and the region starting point
+            broken_lpl = self.detect_first_broken_lpl(pattern_start_pdi)
 
-            latest_choch_pdi = self.h_o_indices[-2]
-            latest_choch_candle = self.pair_df.iloc[latest_choch_pdi]
+            # If no broken LPL can be found, just quit
+            if broken_lpl is None:
+                log_message("Reached end of chart, no more broken LPL's.", v=1)
+                break
 
-            # The latest_pbos_value and latest_choch_candle have to be calculated using the candle value because latest_pbos_value
-            # isn't necessarily located on a pivot so using .pivotvalue isn't an option
-            latest_pbos_value = latest_pbos_candle.high if pbos_type == "peak" else latest_pbos_candle.low
-            latest_choch_value = latest_choch_candle.low if pbos_type == "peak" else latest_choch_candle.high
+            log_message("Starting pattern at", pattern_start_pdi, v=3)
+            log_message("Broken LPL is at", broken_lpl.pdi, v=3)
 
-            # If the candle breaks the PBOS by its shadow, the most recent PBOS will be moved to that candle instead
+            # If the LPL type is valley, it means the trend type is ascending
+            trend_type = "ascending" if broken_lpl.pivot_type == "valley" else "descending"
+
+            # The BOS is the pivot right after the broken LPL
+            bos_pdi = int(self.__calc_region_start_pdi(broken_lpl))
+
+            # When pattern resets, aka a new point is found OR when the pattern is initializing
+            if latest_pbos_pdi is None:
+                latest_pbos_pdi = bos_pdi
+                latest_pbos_threshold = self.zigzag_df[self.zigzag_df.pdi == bos_pdi].iloc[0].pivot_value
+
+                # Add the BOS to the HO indices
+                self.h_o_indices.append(bos_pdi)
+                log_message("Added BOS", bos_pdi, v=1)
+
+                log_message("HO indices", self.h_o_indices, v=2)
+
+            log_message("CHOCH threshold is at", latest_choch_pdi, "BOS threshold is at", latest_pbos_pdi, v=2)
+
+            # Add the first found PBOS to the list as that is needed to kickstart the h_o_zigzag
+            self.pbos_indices.append(bos_pdi)
+
+            # If the candle breaks the PBOS by its shadow, the most recent BOS threshold will be moved to that candle's high instead
             # If a candle breaks the PBOS with its close value, then the search halts
+            # If the candle breaks the last CHOCH by its shadow, the CHOCH threshold will be moved to that candle's low
             # If a candle breaks the last CHOCH with its close, the direction inverts and the search halts
 
-            # The close-value-breaking should have priority over shadow-breaking, that means whichever occurs earlier will
             # have its effect first. This whole logic is implemented in the __detect_breaking_sentiment method.
-            breaking_output = self.__detect_breaking_sentiment(latest_pbos_value, latest_pbos_pdi, latest_choch_value, pbos_type)
+            breaking_output = self.__detect_breaking_sentiment(latest_pbos_threshold, latest_pbos_pdi, latest_choch_threshold, trend_type)
+
             breaking_pdi = breaking_output["pdi"]
             breaking_sentiment = breaking_output["sentiment"]
 
             if breaking_sentiment == "PBOS_SHADOW":
-                self.pbos_indices.append(breaking_pdi)
-                print("PBOS #", latest_pbos_pdi, "broken by candle shadow at index", breaking_pdi)
+                log_message("PBOS #", latest_pbos_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
+
+                latest_pbos_pdi = breaking_pdi
+                latest_pbos_threshold = self.pair_df.iloc[breaking_pdi].high if trend_type == "ascending" else self.pair_df.iloc[breaking_pdi].low
+
+            elif breaking_sentiment == "CHOCH_SHADOW":
+                log_message("CHOCH #", latest_choch_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
+
+                latest_choch_pdi = breaking_pdi
+                latest_choch_threshold = self.pair_df.iloc[breaking_pdi].low if trend_type == "ascending" else self.pair_df.iloc[breaking_pdi].high
 
             elif breaking_sentiment == "PBOS_CLOSE":
-                print("Candle at index",
-                      breaking_pdi, "broke the last PBOS #", latest_pbos_pdi, "with its close price")
+                log_message("Candle at index",
+                            breaking_pdi, "broke the last PBOS #", latest_pbos_pdi, "with its close price", v=2)
+                log_message("BOS #", self.h_o_indices[-1], "break at", breaking_pdi, v=1)
 
-                # The mid-region pivot is the pivot which transports the first now-confirmed PBOS (confirmed by the candle close-breaking
-                # it) to the last pivot of the region, completing one round of the H-O zigzag formation.
+                # The extremum point is the point found using a "lowest low" of a "highest high" search between the last HO pivot and
+                # the closing candle
+                extremum_point_pivot_type = "valley" if trend_type == "ascending" else "peak"
 
-                # The mid-region pivot should have a pivot_Type opposite to that of the original PBOS being studied.
-                mid_region_pivot_type = "valley" if pbos_type == "peak" else "peak"
-
-                # mid_region_pivots_of_type is a list of all the pivots of the right type for the middle region
-                mid_region_pivots_of_type = self.zigzag_df[
-                    (self.zigzag_df.pdi >= self.pbos_indices[0])
+                # extremum_point_pivots_of_type is a list of all the pivots of the right type for the extremum
+                extremum_point_pivots_of_type = self.zigzag_df[
+                    (self.zigzag_df.pdi >= self.h_o_indices[-1])
                     & (self.zigzag_df.pdi <= breaking_pdi)
-                    & (self.zigzag_df.pivot_type == mid_region_pivot_type)]
+                    & (self.zigzag_df.pivot_type == extremum_point_pivot_type)]
 
-                # The mid-region pivot is the lowest low/highest high in the region between the first PBOS and the closing candle
-                if mid_region_pivot_type == "peak":
-                    mid_region_pivot = mid_region_pivots_of_type.loc[mid_region_pivots_of_type['pivot_value'].idxmax()]
+                # The extremum pivot is the lowest low / highest high in the region between the first PBOS and the closing candle
+                if extremum_point_pivot_type == "peak":
+                    extremum_pivot = extremum_point_pivots_of_type.loc[extremum_point_pivots_of_type['pivot_value'].idxmax()]
                 else:
-                    mid_region_pivot = mid_region_pivots_of_type.loc[mid_region_pivots_of_type['pivot_value'].idxmin()]
+                    extremum_pivot = extremum_point_pivots_of_type.loc[extremum_point_pivots_of_type['pivot_value'].idxmin()]
 
-                # Finally, after the LPL has been found, the highest point between the first LPL and the last BOS is set
-                # as the last point in the region
-                same_type_broken_lpls = self.valley_broken_lpls if pbos_type == "peak" else self.peak_broken_lpls
-                first_broken_lpl_after_closing_pdi = same_type_broken_lpls[same_type_broken_lpls.pdi > breaking_pdi].iloc[0].pdi
-                first_breaking_lpl_after_closing_pdi = self.__find_relative_pivot(first_broken_lpl_after_closing_pdi, 2)
+                # Add the extremum point to the HO indices
+                self.h_o_indices.append(int(extremum_pivot.pdi))
+                extremum_type = "lowest low" if trend_type == "ascending" else "highest high"
+                log_message("Added extremum of type", extremum_type, "at", extremum_pivot.pdi, v=1)
 
-                mid_region_pivot_pdi = mid_region_pivot.pdi
-                print("Looking for last HO pivot in range", mid_region_pivot_pdi, first_breaking_lpl_after_closing_pdi)
+                # Now, we can restart finding HO pivots, with the extremum point set as the starting point. Trend stays the same since no CHOCH
+                # has occurred
+                pattern_start_pdi = extremum_pivot.pdi
+                log_message("Setting pattern start to", pattern_start_pdi, v=1)
 
-                if pbos_type == "peak":
-                    last_region_point_idx = self.zigzag_df[
-                        (mid_region_pivot_pdi <= self.zigzag_df.pdi) & (
-                                self.zigzag_df.pdi <= first_breaking_lpl_after_closing_pdi)].pivot_value.idxmax()
-                else:
-                    last_region_point_idx = self.zigzag_df[
-                        (mid_region_pivot_pdi <= self.zigzag_df.pdi) & (
-                                self.zigzag_df.pdi <= first_breaking_lpl_after_closing_pdi)].pivot_value.idxmin()
-
-                last_region_point_pdi = self.zigzag_df.iloc[last_region_point_idx].pdi
-                print("Last region point is: ", last_region_point_pdi)
-
-                self.h_o_indices.append(mid_region_pivot.pdi)
-                self.h_o_indices.append(last_region_point_pdi)
-
-                # Clear the list of recent PBOS's
-                self.pbos_indices = [last_region_point_pdi]
-                print("Added midpoint", mid_region_pivot.pdi, "and last region pivot", last_region_point_pdi)
+                # Essentially reset the algorithm
+                latest_pbos_pdi = None
+                latest_choch_pdi = self.h_o_indices[-1]
+                latest_choch_threshold = self.zigzag_df[self.zigzag_df.pdi == latest_choch_pdi].iloc[0].pivot_value
 
             elif breaking_sentiment == "CHOCH_CLOSE":
-                print("Candle at index",
-                      breaking_pdi, "broke the last CHOCH #", latest_choch_pdi, "with its close price")
+                log_message("Candle at index",
+                            breaking_pdi, "broke the last CHOCH #", latest_choch_pdi, "with its close price", v=2)
+                log_message("CHOCH #", self.h_o_indices[-2], "break at", breaking_pdi, v=1)
 
-                print("Setting LPL type to", pbos_type)
-                # Invert the direction of the LPL's and PBOS's
-                pbos_type = "peak" if pbos_type == "valley" else "valley"
-                lpls_df = self.valley_lpls.copy() if pbos_type == "peak" else self.peak_lpls.copy()
+                trend_type = "ascending" if trend_type == "descending" else "descending"
 
-                # Find the candle which breaks the CHOCH (The second to last point in HO Zigzag)
-                last_lpl_before_choch_breaking_pdi = lpls_df[(lpls_df.pdi >= self.h_o_indices[-1]) & (lpls_df.pdi <= breaking_pdi)].iloc[-1].pdi
+                pattern_start_pdi = self.h_o_indices[-1]
+                log_message("Setting pattern start to", pattern_start_pdi, v=1)
 
-                print("Last LPL before CHOCH is at", last_lpl_before_choch_breaking_pdi)
+                # Essentially reset the algorithm
+                latest_choch_pdi = pattern_start_pdi
+                latest_choch_threshold = self.zigzag_df[self.zigzag_df.pdi == latest_choch_pdi].iloc[0].pivot_value
 
-                # Follow the chain of LPL's, and select the pivot after the last one and add it to H-O Zigzag
-                last_lpl_in_chain = self.__find_last_lpl_in_chain(last_lpl_before_choch_breaking_pdi, lpls_df)
-                self.h_o_indices.append(self.__find_relative_pivot(last_lpl_in_chain, 1))
-                self.pbos_indices = [self.__find_relative_pivot(last_lpl_in_chain, 1)]
+                latest_pbos_pdi = None
 
             # If no candles have broken the PBOS even with a shadow, break the loop
             else:
-                print("No more candles found. Breaking...")
+                log_message("No more candles found. Breaking...", v=1)
 
                 break
 
         return
 
     def identify_fvgs(self):
+
         """
-        This method identifies and stores the Fractal Volatility Gaps (FVGs) in the pair DataFrame.
+        This method identifies and stores the Fair Value Gaps (FVGs) in the pair DataFrame.
 
         An FVG is a gap between two candles that is not filled by the body of a third candle. This method calculates FVGs by creating a rolling window of 3 candles at a time and checking for the existence of an FVG in each window.
 
