@@ -22,19 +22,9 @@ class Algo:
         # h_o_indices indicates the indices of the peaks and valleys in the higher order zigzag
         self.h_o_indices = []
 
-        # Peak and valley LPL's are calculated using the calc_lpls method
-        self.peak_lpls: Optional[pd.DataFrame] = None
-        self.valley_lpls: Optional[pd.DataFrame] = None
-
-        # Brokeb peak and valley LPL's are calculated using the calc_broken_lpls method, then combined into self.broken_lpls
-        self.valley_broken_lpls: Optional[pd.DataFrame] = None
-        self.peak_broken_lpls: Optional[pd.DataFrame] = None
-        self.broken_lpls: Optional[pd.DataFrame] = None
-
         # starting_pdi is the starting point of the entire pattern, calculated using __init_pattern_start_pdi. This method is
         # executed in the calc_h_o_zigzag method.
         self.starting_pdi = 0
-        self.candles_starting_idx = 0
 
         # A list of FVG's in the entire pair_df dataframe, which will get populated by the identify_fvgs method with the
         # FVG object from datatypes.py
