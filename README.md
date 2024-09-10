@@ -43,4 +43,8 @@
 - Logging implemented, now can output to file and stdout with settable allowed verbosity levels in constants.py
 - Broken LPL algorithm changed and optimized, now doesn't try to detect all broken LPL's, only starts at one point and detects the first broken LPL. This causes the search to only continue up to the point that we need, not further, majorly improving performance.
 - detect_breaking_statement now also accounts for CHOCH_SHADOW case for extending and updating the CHOCH threshold from the original HO zigzag pivot. Also improved the performance and simplified the logic of the function.
-- 
+
+### ver b0.6
+- Automated starting point detection implemented. A constant in constants.py governs how many candles in a higher timeframe we backtrack and start drawing a higher order zigzag on. Then, the last higher order pivot on the higher timeframe BEFORE the original starting point of the lower timeframe is selected as the starting point. 
+- The type of the pivot (peak/valley) determines exactly which point to start from in the lower timeframe data. This means if the last pivot type is a "low" (valley), the lowest low in the n candles is selected (Parameter "n" being the number of lower order candles being aggregated in the higher order timeframe candle,  which is determined using a simple mathematical formula/dict)
+- The starting point is then used to draw the higher order zigzag, and the algorithm continues as normal. This is a major update and a big step towards full automation of the algorithm.

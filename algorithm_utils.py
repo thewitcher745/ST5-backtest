@@ -51,7 +51,8 @@ class Algo:
             # and set it as the first pivot. Also set the type of the pivot (peak or valley)
 
             last_pivot_candle_series = \
-                self.pair_df[(self.pair_df['high'] > self.pair_df['high'].shift(1)) | (self.pair_df['low'] < self.pair_df['low'].shift(1))].iloc[0]
+                self.pair_df[(self.pair_df['high'] > self.pair_df['high'].shift(1)) | (
+                        self.pair_df['low'] < self.pair_df['low'].shift(1))].iloc[0]
 
             last_pivot_type: str = 'valley'
             if last_pivot_candle_series.high > self.pair_df.iloc[last_pivot_candle_series.name - 1].high:
@@ -75,7 +76,8 @@ class Algo:
             reversal_from_valley_condition = row.high > last_pivot_candle.high and last_pivot_type == 'valley'
 
             # Does the candle register both a higher high AND a lower low?
-            if (reversal_from_valley_condition and valley_extension_condition) or (peak_extension_condition and reversal_from_peak_condition):
+            if (reversal_from_valley_condition and valley_extension_condition) or (
+                    peak_extension_condition and reversal_from_peak_condition):
 
                 # INITIAL NAIVE IMPLEMENTATION
                 # Add the last previous pivot to the list
@@ -90,7 +92,8 @@ class Algo:
                 # If the candle is red, that means the high value was probably hit before the low value
                 # This means that if the candle is green, we can extend a valley, and if it's red, we can extend a peak
                 # Otherwise the direction must flip
-                if (row.candle_color == 'green' and last_pivot_type == 'valley') or (row.candle_color == 'red' and last_pivot_type == 'peak'):
+                if (row.candle_color == 'green' and last_pivot_type == 'valley') or (
+                        row.candle_color == 'red' and last_pivot_type == 'peak'):
                     last_pivot_candle = Candle.create(row)
 
                 else:
@@ -190,7 +193,8 @@ class Algo:
 
         return None
 
-    def __detect_breaking_sentiment(self, latest_pbos_value: float, latest_pbos_pdi: int, latest_choch_value: float, trend_type: str) -> dict:
+    def __detect_breaking_sentiment(self, latest_pbos_value: float, latest_pbos_pdi: int, latest_choch_value: float,
+                                    trend_type: str) -> dict:
         """
         Detects the sentiment of the market by checking if the latest Potential BOS (PBOS) or CHOCH (Change of Character) value is broken by any
         subsequent candles.
@@ -281,7 +285,7 @@ class Algo:
 
         return region_start_pdi
 
-    def calc_h_o_zigzag(self, starting_point_pdi) -> list[int]:
+    def calc_h_o_zigzag(self, starting_point_pdi) -> None:
         # Set the starting point of the HO zigzag and add it
         self.starting_pdi = starting_point_pdi
         self.h_o_indices.append(self.starting_pdi)
@@ -335,7 +339,8 @@ class Algo:
             # If a candle breaks the last CHOCH with its close, the direction inverts and the search halts
 
             # have its effect first. This whole logic is implemented in the __detect_breaking_sentiment method.
-            breaking_output = self.__detect_breaking_sentiment(latest_pbos_threshold, latest_pbos_pdi, latest_choch_threshold, trend_type)
+            breaking_output = self.__detect_breaking_sentiment(latest_pbos_threshold, latest_pbos_pdi,
+                                                               latest_choch_threshold, trend_type)
 
             breaking_pdi = breaking_output["pdi"]
             breaking_sentiment = breaking_output["sentiment"]
@@ -344,13 +349,15 @@ class Algo:
                 self.log_message("PBOS #", latest_pbos_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
 
                 latest_pbos_pdi = breaking_pdi
-                latest_pbos_threshold = self.pair_df.iloc[breaking_pdi].high if trend_type == "ascending" else self.pair_df.iloc[breaking_pdi].low
+                latest_pbos_threshold = self.pair_df.iloc[breaking_pdi].high if trend_type == "ascending" else \
+                    self.pair_df.iloc[breaking_pdi].low
 
             elif breaking_sentiment == "CHOCH_SHADOW":
                 self.log_message("CHOCH #", latest_choch_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
 
                 latest_choch_pdi = breaking_pdi
-                latest_choch_threshold = self.pair_df.iloc[breaking_pdi].low if trend_type == "ascending" else self.pair_df.iloc[breaking_pdi].high
+                latest_choch_threshold = self.pair_df.iloc[breaking_pdi].low if trend_type == "ascending" else \
+                    self.pair_df.iloc[breaking_pdi].high
 
             elif breaking_sentiment == "PBOS_CLOSE":
                 self.log_message("Candle at index",
@@ -369,9 +376,11 @@ class Algo:
 
                 # The extremum pivot is the lowest low / highest high in the region between the first PBOS and the closing candle
                 if extremum_point_pivot_type == "peak":
-                    extremum_pivot = extremum_point_pivots_of_type.loc[extremum_point_pivots_of_type['pivot_value'].idxmax()]
+                    extremum_pivot = extremum_point_pivots_of_type.loc[
+                        extremum_point_pivots_of_type['pivot_value'].idxmax()]
                 else:
-                    extremum_pivot = extremum_point_pivots_of_type.loc[extremum_point_pivots_of_type['pivot_value'].idxmin()]
+                    extremum_pivot = extremum_point_pivots_of_type.loc[
+                        extremum_point_pivots_of_type['pivot_value'].idxmin()]
 
                 # Add the extremum point to the HO indices
                 self.h_o_indices.append(int(extremum_pivot.pdi))
@@ -426,7 +435,8 @@ class Algo:
         """
         This method identifies and stores the Fair Value Gaps (FVGs) in the pair DataFrame.
 
-        An FVG is a gap between two candles that is not filled by the body of a third candle. This method calculates FVGs by creating a rolling window of 3 candles at a time and checking for the existence of an FVG in each window.
+        An FVG is a gap between two candles that is not filled by the body of a third candle. This method calculates FVGs by creating a rolling
+        window of 3 candles at a time and checking for the existence of an FVG in each window.
 
         If an FVG is found, it is added to the `fvg_list` attribute of the class instance.
 
@@ -457,7 +467,8 @@ class Algo:
 
             # Create intervals for each candle's range and body
             candle1_interval: AbstractInterval = Interval([candle1.low, candle1.high])
-            candle2_body_interval: AbstractInterval = Interval([min(candle2.open, candle2.close), max(candle2.open, candle2.close)])
+            candle2_body_interval: AbstractInterval = Interval(
+                [min(candle2.open, candle2.close), max(candle2.open, candle2.close)])
             candle3_interval: AbstractInterval = Interval([candle3.low, candle3.high])
 
             try:
@@ -495,12 +506,14 @@ class Algo:
 
             # If there is an FVG, add it to the list
             if fvg is not None:
-                self.fvg_list.append(FVG(middle_candle=window.iloc[1].name, fvg_lower=float(fvg.lower), fvg_upper=float(fvg.upper)))
+                self.fvg_list.append(
+                    FVG(middle_candle=window.iloc[1].name, fvg_lower=float(fvg.lower), fvg_upper=float(fvg.upper)))
 
 
 def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
                            ltf_start_time: pd.Timestamp,
-                           backtrack_window: int = constants.starting_point_backtrack_window) -> tuple[pd.Timestamp, str]:
+                           backtrack_window: int = constants.starting_point_backtrack_window) -> tuple[
+    pd.Timestamp, str]:
     """
     This function returns a starting point for the algorithm. It uses the algo object (kind of recursively) with a higher order pair_df and applies
     a higher order zigzag operator on it. The last point of the higher order zigzag before the original LTF data's starting point is set as the
@@ -533,7 +546,8 @@ def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
 
     # The last one along with its type
     last_timestamp = timestamps.iloc[-1].time
-    pivot_type = "low" if htf_algo.zigzag_df[htf_algo.zigzag_df.time == last_timestamp].iloc[0].pivot_type == "valley" else "high"
+    pivot_type = "low" if htf_algo.zigzag_df[htf_algo.zigzag_df.time == last_timestamp].iloc[
+                              0].pivot_type == "valley" else "high"
 
     return last_timestamp, pivot_type
 
@@ -566,13 +580,12 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
     n_aggregated_candles = 16
     # The n_aggregated_candles-long window to find the lowest low/highest high.
     pair_df_window = original_pair_df.iloc[initial_starting_pdi + 1:initial_starting_pdi + n_aggregated_candles + 1]
-    print(starting_point_output)
-    print(pair_df_window)
+
     if starting_pivot_type == "low":
         starting_extremum_candle_pdi = pair_df_window.loc[pair_df_window.low.idxmin()].name
     else:
         starting_extremum_candle_pdi = pair_df_window.loc[pair_df_window.high.idxmax()].name
-    print(starting_extremum_candle_pdi)
+
     pair_df = original_pair_df.iloc[starting_extremum_candle_pdi:].reset_index()
 
     return pair_df
