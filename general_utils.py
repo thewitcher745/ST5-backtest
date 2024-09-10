@@ -7,14 +7,18 @@ import constants
 # from algorithm_utils import Box
 
 
-def load_local_data(hdf_path: str = './cached_data/BTCUSDT-15m.hdf5') -> pd.DataFrame:
+def load_local_data(pair_name: str = "BTCUSDT", timeframe: str = "15m") -> pd.DataFrame:
+    hdf_path: str = f"{pair_name}-{timeframe}.hdf5"
+
     pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
     pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
 
     return pair_df
 
 
-def load_higher_tf_data(hdf_path: str = './cached_data/BTCUSDT-4h.hdf5') -> pd.DataFrame:
+def load_higher_tf_data(pair_name: str = "BTCUSDT", timeframe: str = "4h") -> pd.DataFrame:
+    hdf_path: str = f"{pair_name}-{timeframe}.hdf5"
+
     pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
     pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
 
@@ -130,7 +134,7 @@ class PlottingTool:
                     line_width=0,
                 )
 
-    def draw_points_with_label(self, x_data: list, y_data: list, label: str="", color="black", draw_line=False):
+    def draw_points_with_label(self, x_data: list, y_data: list, label: str = "", color="black", draw_line=False):
         # Plot the zigzag with the entered or default parameters
         # if not color:
         #     if label == "PBOS" or label == "BOS":
