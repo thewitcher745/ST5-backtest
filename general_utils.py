@@ -8,7 +8,7 @@ import constants
 
 
 def load_local_data(pair_name: str = "BTCUSDT", timeframe: str = "15m") -> pd.DataFrame:
-    hdf_path: str = f"{pair_name}-{timeframe}.hdf5"
+    hdf_path: str = f"./cached_data/{pair_name}-{timeframe}.hdf5"
 
     pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
     pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
@@ -17,7 +17,7 @@ def load_local_data(pair_name: str = "BTCUSDT", timeframe: str = "15m") -> pd.Da
 
 
 def load_higher_tf_data(pair_name: str = "BTCUSDT", timeframe: str = "4h") -> pd.DataFrame:
-    hdf_path: str = f"{pair_name}-{timeframe}.hdf5"
+    hdf_path: str = f"./cached_data/{pair_name}-{timeframe}.hdf5"
 
     pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
     pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
@@ -216,3 +216,10 @@ def convert_timestamp_to_readable(timestamp: pd.Timestamp):
     readable_format = f"{utc.year}.{utc.month}.{utc.day}/{two_char_long(utc.hour)}:{two_char_long(utc.minute)}:{two_char_long(utc.second)}"
 
     return readable_format
+
+
+# This function finds the higher timeframe necessary to find the starting point
+def find_higher_timeframe(lower_timeframe):
+    for i, key in enumerate(constants.timeframe_minutes.keys()):
+        if key == lower_timeframe:
+            return list(constants.timeframe_minutes.keys())[i + constants.higher_timeframe_interval]

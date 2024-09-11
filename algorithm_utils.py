@@ -8,14 +8,11 @@ import constants
 
 
 class Algo:
-    def __init__(self, pair_df, symbol, pattern_limit=None, allowed_verbosity=constants.allowed_verbosity):
+    def __init__(self, pair_df: pd.DataFrame, symbol: str, timeframe: str = "15m", pattern_limit=None, allowed_verbosity=constants.allowed_verbosity):
         self.allowed_verbosity = allowed_verbosity
         self.pair_df: pd.DataFrame = pair_df
         self.symbol: str = symbol
         self.zigzag_df: Optional[pd.DataFrame] = None
-
-        # This variable indicates whether only the first pattern is generated, for testing purposes
-        self.pattern_limit = pattern_limit
 
         # pbos_indices and choch_indices is a list which stores the PBOS and CHOCH's being moved due to shadows breaking the most recent lows/highs
         self.pbos_indices = []
@@ -554,7 +551,8 @@ def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
 
 def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFrame,
                                                           initial_data_start_time: pd.Timestamp,
-                                                          original_pair_df: pd.DataFrame) -> pd.DataFrame:
+                                                          original_pair_df: pd.DataFrame,
+                                                          timeframe: str, higher_timeframe: str) -> pd.DataFrame:
     """
     This function created a new pair_df using the starting timestamp found by find_last_htf_ho_pivot. It then determines whether it's a low or a high,
     and processes the data aggregated by the higher order timeframe to find the actual starting candle
@@ -564,6 +562,8 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
         initial_data_start_time (pd.Timestamp): The start date of the uncorrected pair_df
         original_pair_df (pd.DataFrame): The complete, non-truncated version of pair_df which is used to filter the candles to create the
         final pair_df.
+        timeframe (str): The original pair_df timeframe, aka the lower timeframe
+        higher_timeframe (str): The higher timeframe of the pair_df, found using general_utils.find_higher_timeframe()
 
     Returns:
         pd.DataFrame: The filtered, corrected pair_df, ready for use in the algorithm
@@ -576,8 +576,9 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
     # aggregated candles and find the lowest low/highest high candle depending on starting_pivot_type and filtering pair_df based on that.
     initial_starting_pdi = original_pair_df[original_pair_df.time == starting_timestamp].iloc[0].name
 
-    # This parameter actually depends on the conversion rate between the LTF and HTF timeframes, but as a temporary, naive fix it is now hard coded.
-    n_aggregated_candles = 16
+    # This parameter depends on the conversion rate between the LTF and HTF timeframes
+    n_aggregated_candles = int(constants.timeframe_minutes[higher_timeframe] / constants.timeframe_minutes[timeframe])
+
     # The n_aggregated_candles-long window to find the lowest low/highest high.
     pair_df_window = original_pair_df.iloc[initial_starting_pdi + 1:initial_starting_pdi + n_aggregated_candles + 1]
 
