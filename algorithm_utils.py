@@ -1,6 +1,5 @@
 from typing import Optional, NamedTuple
 import pandas as pd
-from intervals import Interval, IllegalArgument, AbstractInterval
 
 from datatypes import *
 from general_utils import log_message as log_message_general
@@ -8,7 +7,7 @@ import constants
 
 
 class Algo:
-    def __init__(self, pair_df: pd.DataFrame, symbol: str, timeframe: str = "15m", pattern_limit=None, allowed_verbosity=constants.allowed_verbosity):
+    def __init__(self, pair_df: pd.DataFrame, symbol: str, timeframe: str = "15m", allowed_verbosity=constants.allowed_verbosity):
         self.allowed_verbosity = allowed_verbosity
         self.pair_df: pd.DataFrame = pair_df
         self.symbol: str = symbol
@@ -440,7 +439,23 @@ class Algo:
         Note: This method does not return anything.
         """
 
-        def calc_fvg(candles_df) -> Union[None, AbstractInterval]:
+        def find_gap(interval1, interval2):
+            if interval1[1] < interval2[0] or interval2[1] < interval1[0]:
+                # The intervals do not overlap, return the gap
+                return [min(interval1[1], interval2[1]), max(interval1[0], interval2[0])]
+            else:
+                # The intervals overlap
+                return None
+
+        def find_overlap(interval1, interval2):
+            if interval1[1] < interval2[0] or interval2[1] < interval1[0]:
+                # The intervals do not overlap
+                return None
+            else:
+                # The intervals overlap
+                return [max(interval1[0], interval2[0]), min(interval1[1], interval2[1])]
+
+        def calc_fvg(candles_df) -> Union[None, list]:
             """
             This helper function calculates the FVG for a given window of 3 candles.
 
@@ -463,32 +478,27 @@ class Algo:
             candle3 = candles_df.iloc[2]
 
             # Create intervals for each candle's range and body
-            candle1_interval: AbstractInterval = Interval([candle1.low, candle1.high])
-            candle2_body_interval: AbstractInterval = Interval(
-                [min(candle2.open, candle2.close), max(candle2.open, candle2.close)])
-            candle3_interval: AbstractInterval = Interval([candle3.low, candle3.high])
+            candle1_interval: list = [candle1.low, candle1.high]
+            candle3_interval: list = [candle3.low, candle3.high]
 
-            try:
-                # Check for overlap between the first and third candle
-                overlap = candle1_interval & candle3_interval
+            # If the first and third candle overlap, no FVG exists
+            if find_overlap(candle1_interval, candle3_interval) is not None:
                 return None
 
-            except IllegalArgument:
+            else:
+                candle2_body_interval: list = [min(candle2.open, candle2.close), max(candle2.open, candle2.close)]
+
                 # If there is no overlap, calculate the gap
                 if candle1.high < candle3.low:
-                    gap = Interval([candle1.high, candle3.low])
-                elif candle1.low >= candle3.high:
-                    gap = Interval([candle3.high, candle1.low])
+                    gap = [candle1.high, candle3.low]
+                elif candle1.low > candle3.high:
+                    gap = [candle3.high, candle1.low]
                 else:
                     return None
 
-                try:
-                    # Check if the second candle's body fills the gap
-                    fvg: AbstractInterval = candle2_body_interval & gap
-                    return fvg
+                fvg: list = find_overlap(candle2_body_interval, gap)
 
-                except IllegalArgument:
-                    return None
+                return fvg
 
         # Create a rolling window of 3 candles
         windows = self.pair_df.rolling(3)
@@ -504,7 +514,7 @@ class Algo:
             # If there is an FVG, add it to the list
             if fvg is not None:
                 self.fvg_list.append(
-                    FVG(middle_candle=window.iloc[1].name, fvg_lower=float(fvg.lower), fvg_upper=float(fvg.upper)))
+                    FVG(middle_candle=window.iloc[1].name, fvg_lower=float(fvg[0]), fvg_upper=float(fvg[1])))
 
 
 def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
