@@ -66,6 +66,9 @@ class PlottingTool:
     def save_plot(self, scale=1):
         self.fig.write_image("./plot.png", format="png", scale=scale)
 
+    def zoom_on_candle(self, candle_index, zoom_range=50):
+        self.fig.update_xaxes(range=[candle_index - zoom_range, candle_index + zoom_range])
+
     def draw_candlesticks(self, df, label="Candlestick") -> None:
         # Set the candlestick data to be plotted from the time values instead of pair_df_indices if the x_axis_type is time
         candlestick_x_data = df.index
