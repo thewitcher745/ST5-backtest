@@ -66,8 +66,20 @@ class PlottingTool:
     def save_plot(self, scale=1):
         self.fig.write_image("./plot.png", format="png", scale=scale)
 
-    def zoom_on_candle(self, candle_index, zoom_range=50):
-        self.fig.update_xaxes(range=[candle_index - zoom_range, candle_index + zoom_range])
+    def zoom_on_candle(self, candle_index, y_zoom_range: list = None, x_zoom_range=50) -> None:
+        """
+        This functions zooms on a specific candle in the plotting window.
+
+        Parameters:
+        candle_index (int): The index of the candle to zoom on.
+        y_zoom_range (list): The range of the y-axis to zoom in on. If None, the y-axis will not be zoomed in, absolute
+        x_zoom_range (int): The range of the x-axis to zoom in on from both directions, relative
+
+        """
+        self.fig.update_xaxes(range=[candle_index - x_zoom_range, candle_index + x_zoom_range])
+
+        if y_zoom_range:
+            self.fig.update_yaxes(range=y_zoom_range)
 
     def draw_candlesticks(self, df, label="Candlestick") -> None:
         # Set the candlestick data to be plotted from the time values instead of pair_df_indices if the x_axis_type is time
