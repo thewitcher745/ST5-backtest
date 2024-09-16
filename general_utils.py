@@ -219,7 +219,7 @@ def convert_timestamp_to_readable(timestamp: pd.Timestamp):
 
 
 # This function finds the higher timeframe necessary to find the starting point
-.def find_higher_timeframe(lower_timeframe):
+def find_higher_timeframe(lower_timeframe):
     for i, key in enumerate(constants.timeframe_minutes.keys()):
         if key == lower_timeframe:
             return list(constants.timeframe_minutes.keys())[i + constants.higher_timeframe_interval]
