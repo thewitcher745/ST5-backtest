@@ -90,7 +90,7 @@ class PlottingTool:
         # Plot the zigzag with the entered or default parameters
         self.fig.add_trace(go.Scatter(x=zigzag_x_data,
                                       y=zigzag_df.pivot_value,
-                                      mode='lines+markers',
+                                      mode='lines',
                                       name=title,
                                       line=dict(color=color)))
 
@@ -164,7 +164,7 @@ class PlottingTool:
                           color=color)  # You can adjust the font size as needed
         ))
 
-    def draw_box(self, box, pair_df_end_index, color=None):
+    def draw_box(self, box, pair_df_end_index=None, color=None):
         x1 = pair_df_end_index if len(box.price_reentry_indices) == 0 else box.price_reentry_indices[0]
         if color is None:
             color = "green" if box.type == "long" else "red"
@@ -219,7 +219,7 @@ def convert_timestamp_to_readable(timestamp: pd.Timestamp):
 
 
 # This function finds the higher timeframe necessary to find the starting point
-def find_higher_timeframe(lower_timeframe):
+.def find_higher_timeframe(lower_timeframe):
     for i, key in enumerate(constants.timeframe_minutes.keys()):
         if key == lower_timeframe:
             return list(constants.timeframe_minutes.keys())[i + constants.higher_timeframe_interval]
