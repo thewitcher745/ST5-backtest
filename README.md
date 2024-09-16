@@ -48,3 +48,10 @@
 - Automated starting point detection implemented. A constant in constants.py governs how many candles in a higher timeframe we backtrack and start drawing a higher order zigzag on. Then, the last higher order pivot on the higher timeframe BEFORE the original starting point of the lower timeframe is selected as the starting point. 
 - The type of the pivot (peak/valley) determines exactly which point to start from in the lower timeframe data. This means if the last pivot type is a "low" (valley), the lowest low in the n candles is selected (Parameter "n" being the number of lower order candles being aggregated in the higher order timeframe candle,  which is determined using a simple mathematical formula/dict)
 - The starting point is then used to draw the higher order zigzag, and the algorithm continues as normal. This is a major update and a big step towards full automation of the algorithm.
+
+### ver b0.7
+- Order blocks implemented. The class used to be named "Box" and implemented in the datatypes.py module. It's now moved to algorithm_utils but might later be moved as a cleaner solution.
+- Order blocks now store basic information about the formation of the OB, such as the starting index, top and bottom, price exit and reentry, etc.
+- Rudimentary features for performing condition checks were also implemented, mainly a function to form the window to perform the checks on. 
+- Plotting utilities updated to include zooming functionalities, on x and y-axis, on a specific candle specified by an index.
+- Lower order zigzags are now stripped of their markers to provide a tidier chart. 

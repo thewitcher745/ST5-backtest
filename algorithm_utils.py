@@ -17,6 +17,12 @@ class Algo:
         self.pbos_indices = []
         self.choch_indices = []
 
+        # Indices of NONBROKEN LPL's. This means only LPL's that get updated to the next one in the calc_broken_lpl method are added here.
+        self.lpl_indices = {
+            "peak": [],
+            "valley": []
+        }
+
         # h_o_indices indicates the indices of the peaks and valleys in the higher order zigzag
         self.h_o_indices = []
 
@@ -180,12 +186,20 @@ class Algo:
             # Extension
             if extension_condition:
                 # If a higher high is found, extend and update the pattern
+
                 prev_pivot_pdi = self.__find_relative_pivot(row.pdi, -1)
                 prev_pivot = self.zigzag_df[self.zigzag_df.pdi == prev_pivot_pdi].iloc[0]
-
+                self.log_message("Changing breaking_pdi to", prev_pivot.pdi)
                 breaking_pdi = prev_pivot.pdi
                 breaking_value = prev_pivot.pivot_value
                 extension_value = row.pivot_value
+
+            # If a break or extension has happened, the next LPL is the pivot at the breaking pivot
+            if breaking_condition or extension_condition:
+                if trend_type == "ascending":
+                    self.lpl_indices["valley"].append(breaking_pdi)
+                else:
+                    self.lpl_indices["peak"].append(breaking_pdi)
 
         return None
 
@@ -600,3 +614,103 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
     pair_df = original_pair_df.iloc[starting_extremum_candle_pdi:].reset_index()
 
     return pair_df
+
+
+class OrderBlock:
+    def __init__(self, base_candle: Union[pd.Series, Candle], ob_type: str):
+        if isinstance(base_candle, Candle):
+            self.start_index = base_candle.pdi
+        elif isinstance(base_candle, pd.Series):
+            self.start_index = base_candle.name
+        elif isinstance(base_candle, tuple):
+            self.start_index = base_candle.Index
+
+        self.base_candle = base_candle
+        self.type = ob_type
+        self.id = f"{self.start_index}/" + gen_utils.convert_timestamp_to_readable(base_candle.time)
+        self.id += "L" if ob_type == "long" else "S"
+
+        self.top = base_candle.high
+        self.bottom = base_candle.low
+
+        self.is_valid = True
+        self.price_exit_index = None
+        self.price_reentry_indices = []
+        self.condition_check_window = None
+
+    def check_box_entries(self, pair_df: pd.DataFrame) -> None:
+        """
+        Method to check the entries of the box and determine its validity.
+
+        This method checks when the price candlesticks in pair_df "exit" the box and whether they re-enter the box.
+        If there is a re-entry, the box is marked as invalid. All the indices are also registered.
+
+        Parameters:
+        pair_df (pd.DataFrame): The DataFrame containing the price data.
+
+        Returns:
+        None
+        """
+
+        # Get the subset of pair_df that we need to check
+        check_window = pair_df.iloc[self.start_index + 1:]
+
+        # If the box is of type "long"
+        if self.type == "long":
+            # Find the first index where the price exits the box
+            exit_index = check_window[check_window['high'] > self.top].first_valid_index()
+
+            if exit_index is not None:
+                self.price_exit_index = exit_index
+                # If an exit is found, check for a reentry into the box after the exit
+                # Should use check_window.loc[exit_index:] instead of iloc because the current df is a subset of pair_df, and the indices are
+                # all messed up
+                reentry_check_window = check_window.loc[exit_index + 1:]
+                reentry_index = reentry_check_window.loc[reentry_check_window['low'] < self.top].first_valid_index()
+                # If a reentry is found, mark the box as invalid
+                if reentry_index is not None:
+                    self.price_reentry_indices.append(reentry_index)
+                    self.is_valid = False
+
+        else:  # If the box is of type "short"
+            exit_index = check_window[check_window['low'] < self.bottom].first_valid_index()
+            if exit_index is not None:
+                self.price_exit_index = exit_index
+                # If an exit is found, check for a reentry into the box after the exit
+                # Should use check_window.loc[exit_index:] instead of iloc because the current df is a subset of pair_df, and the indices are
+                # all messed up
+                reentry_check_window = check_window.loc[exit_index + 1:]
+                reentry_index = reentry_check_window.loc[reentry_check_window['high'] > self.bottom].first_valid_index()
+                # If a reentry is found, mark the box as invalid
+                if reentry_index is not None:
+                    self.price_reentry_indices.append(reentry_index)
+                    # self.is_valid = False
+
+        self.form_condition_check_window(pair_df)
+
+    def form_condition_check_window(self, pair_df: pd.DataFrame) -> None:
+        """
+        Method to form the condition check window for the box. This check window is used to check the order block confirmation conditions (FVG and price
+        breaking, refer to the check_x_condition methods). The check_box_entries method should be called before this method.
+
+        Parameters
+        pair_df (pd.DataFrame): The DataFrame containing the price data.
+        """
+        self.condition_check_window = pair_df.iloc[self.start_index:self.price_reentry_indices[0]]
+
+    def check_fvg_condition(self):
+        """
+        Method to check the FVG condition for the box. The method checks if the exiting candle has an FVG on it which aligns exactly with the box's
+        top/bottom for long/short cases. This method should be called after the check_box_entries method. The method sets the has_fvg_cond property
+        for the instance of the object if the check passes, otherwise it will remain false.
+
+        The method aggregates the candles before and after the exit candle using min() and max() functions and identifies the fair value gaps in the
+        exiting candle, if any exist. Then the values are checked for alignment with the box's top/bottom for long/short cases.
+
+        """
+        # aggregated_candle_after represents the candles after the exit candle. This would be a candle with the highest high and lowest low set as
+        # its high and low.
+        aggregated_candle_after_exit: list = [self.condition_check_window.iloc[self.price_exit_index:].low.min(),
+                                              self.condition_check_window.iloc[self.price_exit_index:].high.max()]
+
+        print(aggregated_candle_after_exit)
