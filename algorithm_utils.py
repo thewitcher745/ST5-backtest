@@ -30,11 +30,14 @@ class Algo:
         # executed in the calc_h_o_zigzag method.
         self.starting_pdi = 0
 
-        # A list of FVG's in the entire pair_df dataframe, which will get populated by the identify_fvgs method with the
-        # FVG object from datatypes.py
-        self.fvg_list = []
+    def log_message(self, *messages, v: int = 3):
+        """
+        Method to log messages with a verbosity check.
 
-    def log_message(self, *messages, v=3):
+        Args:
+            *messages: List of messages in print() argument format
+            v (int): Allowed verbosity level for the message
+        """
         log_message_general(*messages, v=v, av=self.allowed_verbosity)
 
     def init_zigzag(self, last_pivot_type=None, last_pivot_candle_pdi=None) -> None:
@@ -126,16 +129,16 @@ class Algo:
 
         self.zigzag_df = zigzag_df
 
-    def __find_relative_pivot(self, pivot_pdi: int, delta: int) -> int:
+    def find_relative_pivot(self, pivot_pdi: int, delta: int) -> int:
         """
         Finds the relative pivot to the pivot at the given index.
 
-        Parameters:
-        pivot_pdi (int): The pdi of the pivot to find the relative pivot for.
-        delta (int): The distance from the pivot to the relative pivot.
+        Args:
+            pivot_pdi (int): The pdi of the pivot to find the relative pivot for.
+            delta (int): The distance from the pivot to the relative pivot.
 
         Returns:
-        int: The pdi of the relative pivot.
+            int: The pdi of the relative pivot.
         """
 
         # zigzag_idx is the zigzag_df index of the current pivot
@@ -150,12 +153,12 @@ class Algo:
         An LPL (For ascending patterns) is registered when a higher high than the highest high since the last LPL is registered. If a lower low than
         the lowest low is registered, the last LPL is considered a broken LPL and registered as such.
 
-        Parameters:
-        None
+        Args:
+            search_window_start_pdi (int): The pdi of the pivot to start the search from.
 
         Returns:
-        pd.Series: a row of zigzag_df which contains the broken LPL
-        None: If no broke LPL is found
+            pd.Series: a row of zigzag_df which contains the broken LPL
+            None: If no broke LPL is found
         """
 
         starting_pivot = self.zigzag_df[self.zigzag_df.pdi == search_window_start_pdi].iloc[0]
@@ -165,10 +168,10 @@ class Algo:
         # Breaking and extension pdi and values represent the values to surpass for registering a higher high (extension) of a lower low (breaking)
         breaking_pdi = search_window_start_pdi
         breaking_value: float = starting_pivot.pivot_value
-        extension_pdi = self.__find_relative_pivot(search_window_start_pdi, 1)
+        extension_pdi = self.find_relative_pivot(search_window_start_pdi, 1)
         extension_value: float = self.zigzag_df.loc[self.zigzag_df.pdi == extension_pdi].iloc[0].pivot_value
 
-        check_start_pdi = self.__find_relative_pivot(search_window_start_pdi, 2)
+        check_start_pdi = self.find_relative_pivot(search_window_start_pdi, 2)
 
         for row in self.zigzag_df[self.zigzag_df.pdi > check_start_pdi].iloc[:-1].itertuples():
             if trend_type == "ascending":
@@ -187,7 +190,7 @@ class Algo:
             if extension_condition:
                 # If a higher high is found, extend and update the pattern
 
-                prev_pivot_pdi = self.__find_relative_pivot(row.pdi, -1)
+                prev_pivot_pdi = self.find_relative_pivot(row.pdi, -1)
                 prev_pivot = self.zigzag_df[self.zigzag_df.pdi == prev_pivot_pdi].iloc[0]
                 self.log_message("Changing breaking_pdi to", prev_pivot.pdi)
                 breaking_pdi = prev_pivot.pdi
@@ -206,24 +209,21 @@ class Algo:
     def __detect_breaking_sentiment(self, latest_pbos_value: float, latest_pbos_pdi: int, latest_choch_value: float,
                                     trend_type: str) -> dict:
         """
-        Detects the sentiment of the market by checking if the latest Potential BOS (PBOS) or CHOCH (Change of Character) value is broken by any
-        subsequent candles.
+        Detects the breaking sentiment in the price data based on the latest PBOS and CHOCH values.
 
-        The method checks both the shadows (highs for peaks and lows for valleys) and the closing values of the candles.
-        If a candle breaks the PBOS with its shadow, the sentiment is "PBOS_SHADOW".
-        If a candle breaks the PBOS with its close value, the sentiment is "PBOS_CLOSE".
-        If a candle breaks the CHOCH with its close value, the sentiment is "CHOCH_CLOSE".
-        If no candles break the PBOS or CHOCH, the sentiment is "NONE".
+        This method identifies the candles that break the PBOS and CHOCH values either by shadow or close price. It then determines
+        which breaking event occurs first and returns the sentiment associated with that event.
 
-        Parameters:
-        latest_pbos_value (float): The value of the latest PBOS.
-        latest_pbos_pdi (int): The index of the latest PBOS in the pair DataFrame.
-        pbos_type (str): The type of the PBOS, either "peak" or "valley".
+        Args:
+            latest_pbos_value (float): The latest PBOS value.
+            latest_pbos_pdi (int): The index of the latest PBOS.
+            latest_choch_value (float): The latest CHOCH value.
+            trend_type (str): The current trend type, either "ascending" or "descending".
 
         Returns:
-        dict: A dictionary containing the sentiment ("NONE", "SHADOW", or "CLOSE") and the index of the breaking candle, if any.
+            dict: A dictionary containing the breaking sentiment and the index of the candle that caused the break. The breaking sentiment
+                  can be one of the following: "PBOS_SHADOW", "PBOS_CLOSE", "CHOCH_SHADOW", "CHOCH_CLOSE", "NONE".
         """
-
         search_window: pd.DataFrame = self.pair_df.iloc[latest_pbos_pdi + 1:]
 
         # The definition of "breaking" is different whether the PBOS is a peak or a valley
@@ -244,6 +244,7 @@ class Algo:
         choch_shadow_index = choch_shadow_breaking_candles.first_valid_index()
         choch_close_index = choch_close_breaking_candles.first_valid_index()
 
+        # The return dicts for each case
         pbos_shadow_output = {
             "sentiment": "PBOS_SHADOW",
             "pdi": pbos_shadow_index
@@ -268,7 +269,8 @@ class Algo:
         outputs_list: list[dict] = [pbos_shadow_output, pbos_close_output, choch_shadow_output, choch_close_output]
 
         # This function sorts the outputs of the breaking sentiment analysis to determine which one is reached first using the
-        # sorted built-in function. It also prioritizes sentiments that have "CLOSE" in their description.
+        # sorted built-in function. It also prioritizes sentiments that have "CLOSE" in their description, because a candle closing above/below a
+        # value logically takes priority over a shadow.
         def sorting_key(output_item):
             pdi = output_item["pdi"] if output_item["pdi"] is not None else 0
             has_close = 1 if "CLOSE" in output_item["sentiment"] else 2
@@ -281,35 +283,63 @@ class Algo:
 
     def __calc_region_start_pdi(self, broken_lpl: pd.Series) -> int:
         """
-        Initializes the starting point of the region after the first potential BOS.
+        Initializes the starting point of the region after the broken LPL
 
-        The region starting point is the first pivot right after the first broken LPL
+        The region starting point is the first pivot right after the broken LPL
 
-        Note: This method does not return anything.
+        Args:
+            broken_lpl (pd.Series): The broken LPL
         """
 
         # The pivots located between the starting point and the first pivot after the broken LPL. The starting point is either
         # 1) The start of the pattern, which means we are forming the first region, or
         # 2) The start of the next section. The region_start_pdi variable determines this value.
-        region_start_pdi = self.__find_relative_pivot(broken_lpl.pdi, 1)
+        region_start_pdi = self.find_relative_pivot(broken_lpl.pdi, 1)
 
         return region_start_pdi
 
     def calc_h_o_zigzag(self, starting_point_pdi) -> None:
+        """
+        Calculates the higher order zigzag for the given starting point.
+
+        This method sets the starting point of the higher order zigzag and adds it to the list of higher order indices. It then
+        identifies the first broken LPL after the starting point and determines the trend type based on the type of the broken LPL.
+        It then identifies the base of the swing (BOS) which is the pivot right after the broken LPL.
+
+        The method then enters a loop where it checks for breaking sentiments (either PBOS_SHADOW, CHOCH_SHADOW, PBOS_CLOSE, CHOCH_CLOSE or NONE)
+        and updates the latest PBOS and CHOCH thresholds accordingly if a shadow has broken a PBOS or CHOCH. If a PBOS_CLOSE or CHOCH_CLOSE sentiment
+        is detected, the method identifies the extremum point and adds it to the higher order indices, and then resets the starting point for finding higher order pivots.
+
+        The loop continues until no more candles are found that break the PBOS or CHOCH even with a shadow.
+
+        Args:
+            starting_point_pdi (int): The starting point of the higher order zigzag.
+
+        Returns:
+            None
+        """
+
         # Set the starting point of the HO zigzag and add it
         self.starting_pdi = starting_point_pdi
         self.h_o_indices.append(self.starting_pdi)
+
+        # The first CHOCH is always the starting point, until it is updated when a BOS or a CHOCH is broken.
         latest_choch_pdi = self.starting_pdi
         latest_choch_threshold: float = self.zigzag_df[self.zigzag_df.pdi == self.starting_pdi].iloc[0].pivot_value
         self.log_message("Added starting point", self.starting_pdi, v=1)
 
+        # The starting point of each pattern. This resets and changes whenever the pattern needs to be restarted. Unlike self.starting_pdi this DOES
+        # change.
         pattern_start_pdi = self.starting_pdi
 
         latest_pbos_pdi = None
         latest_pbos_threshold = None
 
+        # The loop which continues until the end of the pattern is reached.
         while True:
+            # Spacing between each iteration
             self.log_message("", v=1)
+
             # Find the first broken LPL after the starting point and the region starting point
             broken_lpl = self.detect_first_broken_lpl(pattern_start_pdi)
 
@@ -327,7 +357,8 @@ class Algo:
             # The BOS is the pivot right after the broken LPL
             bos_pdi = int(self.__calc_region_start_pdi(broken_lpl))
 
-            # When pattern resets, aka a new point is found OR when the pattern is initializing
+            # When pattern resets, aka a new point is found OR when the pattern is initializing. Each time a restart is required in the next
+            # iteration, latest_pbos_pdi is set to None.
             if latest_pbos_pdi is None:
                 latest_pbos_pdi = bos_pdi
                 latest_pbos_threshold = self.zigzag_df[self.zigzag_df.pdi == bos_pdi].iloc[0].pivot_value
@@ -347,14 +378,17 @@ class Algo:
             # If a candle breaks the PBOS with its close value, then the search halts
             # If the candle breaks the last CHOCH by its shadow, the CHOCH threshold will be moved to that candle's low
             # If a candle breaks the last CHOCH with its close, the direction inverts and the search halts
-
-            # have its effect first. This whole logic is implemented in the __detect_breaking_sentiment method.
+            # These sentiments are detected using the self.__detect_breaking_sentiment method.
             breaking_output = self.__detect_breaking_sentiment(latest_pbos_threshold, latest_pbos_pdi,
                                                                latest_choch_threshold, trend_type)
-
             breaking_pdi = breaking_output["pdi"]
             breaking_sentiment = breaking_output["sentiment"]
 
+            # For brevity and simplicity, from this point on all the comments are made with the ascending pattern in mind. THe descending pattern is
+            # exactly the same, just inverted.
+            # If a PBOS has been broken by a shadow(And ONLY its shadow, not its close value. This is explicitly enforced in the sentiment detection
+            # method, where CLOSE sentiments are given priority over SHADOW ), update the latest PBOS pdi and threshold (level). Note that since this
+            # statement doesn't set latest_pbos_pdi to None, the pattern will not restart.
             if breaking_sentiment == "PBOS_SHADOW":
                 self.log_message("PBOS #", latest_pbos_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
 
@@ -362,6 +396,7 @@ class Algo:
                 latest_pbos_threshold = self.pair_df.iloc[breaking_pdi].high if trend_type == "ascending" else \
                     self.pair_df.iloc[breaking_pdi].low
 
+            # If a candle breaks the CHOCH with its shadow (And ONLY its shadow, not its close value), update the latest CHOCH pdi and threshold
             elif breaking_sentiment == "CHOCH_SHADOW":
                 self.log_message("CHOCH #", latest_choch_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
 
@@ -369,6 +404,9 @@ class Algo:
                 latest_choch_threshold = self.pair_df.iloc[breaking_pdi].low if trend_type == "ascending" else \
                     self.pair_df.iloc[breaking_pdi].high
 
+            # If a candle CLOSES above the latest PBOS value, it means we have found an extremum, which would be the lowest low zigzag pivot between
+            # the latest HO zigzag point (The initial BOS before being updated with shadows) and the candle which closed above it. After detecting
+            # this extremum, we add it to HO Zigzag.
             elif breaking_sentiment == "PBOS_CLOSE":
                 self.log_message("Candle at index",
                                  breaking_pdi, "broke the last PBOS #", latest_pbos_pdi, "with its close price", v=2)
@@ -408,9 +446,13 @@ class Algo:
 
                 # Essentially reset the algorithm
                 latest_pbos_pdi = None
+
+                # New lowest low is our CHOCH.
                 latest_choch_pdi = self.h_o_indices[-1]
                 latest_choch_threshold = self.zigzag_df[self.zigzag_df.pdi == latest_choch_pdi].iloc[0].pivot_value
 
+            # If a CHOCH has happened, this means the pattern has inverted and should be restarted with the last LPL before the candle which closed
+            # below the CHOCH.
             elif breaking_sentiment == "CHOCH_CLOSE":
                 self.log_message("Candle at index",
                                  breaking_pdi, "broke the last CHOCH #", latest_choch_pdi, "with its close price", v=2)
@@ -435,100 +477,9 @@ class Algo:
             # If no candles have broken the PBOS even with a shadow, break the loop
             else:
                 self.log_message("No more candles found. Breaking...", v=1)
-
                 break
 
         # return self.h_o_indices
-
-    def identify_fvgs(self):
-
-        """
-        This method identifies and stores the Fair Value Gaps (FVGs) in the pair DataFrame.
-
-        An FVG is a gap between two candles that is not filled by the body of a third candle. This method calculates FVGs by creating a rolling
-        window of 3 candles at a time and checking for the existence of an FVG in each window.
-
-        If an FVG is found, it is added to the `fvg_list` attribute of the class instance.
-
-        Note: This method does not return anything.
-        """
-
-        def find_gap(interval1, interval2):
-            if interval1[1] < interval2[0] or interval2[1] < interval1[0]:
-                # The intervals do not overlap, return the gap
-                return [min(interval1[1], interval2[1]), max(interval1[0], interval2[0])]
-            else:
-                # The intervals overlap
-                return None
-
-        def find_overlap(interval1, interval2):
-            if interval1[1] < interval2[0] or interval2[1] < interval1[0]:
-                # The intervals do not overlap
-                return None
-            else:
-                # The intervals overlap
-                return [max(interval1[0], interval2[0]), min(interval1[1], interval2[1])]
-
-        def calc_fvg(candles_df) -> Union[None, list]:
-            """
-            This helper function calculates the FVG for a given window of 3 candles.
-
-            It first creates intervals for each candle's range (high to low) and body (open to close). It then checks if there is an overlap between
-            the first and third candle. If there is, it returns None as there is no FVG.
-
-            If there is no overlap, it calculates the gap between the first and third candle and calculates the intersection of the gap with the
-            second candle's body. THe intersection is the FVG.
-
-            Parameters:
-            candles_df (pd.DataFrame): A DataFrame containing 3 consecutive candles.
-
-            Returns:
-            AbstractInterval: An interval representing the FVG, or None if there is no FVG.
-            """
-
-            # Get each candle from the DataFrame
-            candle1 = candles_df.iloc[0]
-            candle2 = candles_df.iloc[1]
-            candle3 = candles_df.iloc[2]
-
-            # Create intervals for each candle's range and body
-            candle1_interval: list = [candle1.low, candle1.high]
-            candle3_interval: list = [candle3.low, candle3.high]
-
-            # If the first and third candle overlap, no FVG exists
-            if find_overlap(candle1_interval, candle3_interval) is not None:
-                return None
-
-            else:
-                candle2_body_interval: list = [min(candle2.open, candle2.close), max(candle2.open, candle2.close)]
-
-                # If there is no overlap, calculate the gap
-                if candle1.high < candle3.low:
-                    gap = [candle1.high, candle3.low]
-                elif candle1.low > candle3.high:
-                    gap = [candle3.high, candle1.low]
-                else:
-                    return None
-
-                fvg: list = find_overlap(candle2_body_interval, gap)
-
-                return fvg
-
-        # Create a rolling window of 3 candles
-        windows = self.pair_df.rolling(3)
-
-        for window in windows:
-            # Skip windows with less than 3 candles
-            if len(window) < 3:
-                continue
-
-            # Calculate the FVG for the current window
-            fvg = calc_fvg(window)
-
-            # If there is an FVG, add it to the list
-            if fvg is not None:
-                self.fvg_list.append(
-                    FVG(middle_candle=window.iloc[1].name, fvg_lower=float(fvg[0]), fvg_upper=float(fvg[1])))
 
 
 def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
@@ -540,7 +491,7 @@ def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
     a higher order zigzag operator on it. The last point of the higher order zigzag before the original LTF data's starting point is set as the
     starting timestamp for LTF data, and the data is reshaped to account for it
 
-    Parameters:
+    Args:
         htf_pair_df (pd.Dataframe): A dataframe containing the higher timeframe data
         ltf_start_time (pd.Timestamp): A timestamp of the beginning of the lower timeframe data
         backtrack_window (int): The size of the backtracking performed from the beginning of the original lower timeframe data.
@@ -581,7 +532,7 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
     This function created a new pair_df using the starting timestamp found by find_last_htf_ho_pivot. It then determines whether it's a low or a high,
     and processes the data aggregated by the higher order timeframe to find the actual starting candle
 
-    Parameters:
+    Args:
         htf_pair_df (pd.DataFrame): The higher timeframe DataFrame
         initial_data_start_time (pd.Timestamp): The start date of the uncorrected pair_df
         original_pair_df (pd.DataFrame): The complete, non-truncated version of pair_df which is used to filter the candles to create the
@@ -611,7 +562,7 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
     else:
         starting_extremum_candle_pdi = pair_df_window.loc[pair_df_window.high.idxmax()].name
 
-    pair_df = original_pair_df.iloc[starting_extremum_candle_pdi:].reset_index()
+    pair_df = original_pair_df.iloc[starting_extremum_candle_pdi:].reset_index(drop=True)
 
     return pair_df
 
@@ -637,6 +588,13 @@ class OrderBlock:
         self.price_exit_index = None
         self.price_reentry_indices = []
         self.condition_check_window = None
+        self.has_fvg_condition = None
+        self.has_stop_break_condition = None
+
+        self.times_moved = 0
+
+    def __repr__(self):
+        return f"OB {self.id} ({self.type})"
 
     def check_box_entries(self, pair_df: pd.DataFrame) -> None:
         """
@@ -645,11 +603,8 @@ class OrderBlock:
         This method checks when the price candlesticks in pair_df "exit" the box and whether they re-enter the box.
         If there is a re-entry, the box is marked as invalid. All the indices are also registered.
 
-        Parameters:
-        pair_df (pd.DataFrame): The DataFrame containing the price data.
-
-        Returns:
-        None
+        Args:
+            pair_df (pd.DataFrame): The DataFrame containing the price data.
         """
 
         # Get the subset of pair_df that we need to check
@@ -693,10 +648,14 @@ class OrderBlock:
         Method to form the condition check window for the box. This check window is used to check the order block confirmation conditions (FVG and price
         breaking, refer to the check_x_condition methods). The check_box_entries method should be called before this method.
 
-        Parameters
-        pair_df (pd.DataFrame): The DataFrame containing the price data.
+        Args
+            pair_df (pd.DataFrame): The DataFrame containing the price data.
         """
-        self.condition_check_window = pair_df.iloc[self.start_index:self.price_reentry_indices[0]]
+
+        if len(self.price_reentry_indices) > 0:
+            self.condition_check_window = pair_df.iloc[self.start_index:self.price_reentry_indices[0]]
+        else:
+            self.condition_check_window = pair_df.iloc[self.start_index:]
 
     def check_fvg_condition(self):
         """
@@ -706,11 +665,79 @@ class OrderBlock:
 
         The method aggregates the candles before and after the exit candle using min() and max() functions and identifies the fair value gaps in the
         exiting candle, if any exist. Then the values are checked for alignment with the box's top/bottom for long/short cases.
-
         """
+
         # aggregated_candle_after represents the candles after the exit candle. This would be a candle with the highest high and lowest low set as
         # its high and low.
-        aggregated_candle_after_exit: list = [self.condition_check_window.iloc[self.price_exit_index:].low.min(),
-                                              self.condition_check_window.iloc[self.price_exit_index:].high.max()]
 
-        print(aggregated_candle_after_exit)
+        aggregated_candle_after_exit: list = [self.condition_check_window.loc[self.price_exit_index + 1:].low.min(),
+                                              self.condition_check_window.loc[self.price_exit_index + 1:].high.max()]
+        aggregated_candle_before_exit: list = [self.condition_check_window.loc[:self.price_exit_index - 1].low.min(),
+                                               self.condition_check_window.loc[:self.price_exit_index - 1].high.max()]
+
+        def find_gap(interval1, interval2):
+            if interval1[1] < interval2[0] or interval2[1] < interval1[0]:
+                # The intervals do not overlap, return the gap
+                return [min(interval1[1], interval2[1]), max(interval1[0], interval2[0])]
+            else:
+                # The intervals overlap
+                return None
+
+        def find_overlap(interval1, interval2):
+            if interval1[1] < interval2[0] or interval2[1] < interval1[0]:
+                # The intervals do not overlap
+                return None
+            else:
+                # The intervals overlap
+                return [max(interval1[0], interval2[0]), min(interval1[1], interval2[1])]
+
+        # If the before and after aggregated candle overlap, no FVG exists
+        if find_overlap(aggregated_candle_before_exit, aggregated_candle_after_exit) is not None:
+            self.has_fvg_condition = False
+
+        else:
+            exit_candle: pd.Series = self.condition_check_window.loc[self.price_exit_index]
+
+            # The overlap between the gap between the before and after candles and the exit candle's body constitutes the FVG.
+            exit_candle_body_interval: list = [min(exit_candle.open, exit_candle.close), max(exit_candle.open, exit_candle.close)]
+            gap = find_gap(aggregated_candle_before_exit, aggregated_candle_after_exit)
+
+            fvg: list = find_overlap(exit_candle_body_interval, gap)
+
+            # If an overlap between the gap and the exit candle's body exists
+            if fvg is not None:
+                # Check if the FVG area aligns with the order block EXACTLY. If so, the check passes
+                if self.type == "long" and min(fvg) == self.top:
+                    self.has_fvg_condition = True
+                elif self.type == "short" and max(fvg) == self.bottom:
+                    self.has_fvg_condition = True
+
+                # If there isn't exact alignment, the check doesn't pass.
+                else:
+                    self.has_fvg_condition = False
+
+            # If the exit candle's body doesn't overlap with the gap, there is no FVG.
+            else:
+                self.has_fvg_condition = False
+
+    def check_stop_break_condition(self):
+        """
+        This method checks if there is a price which breaks the OrderBlock's stop level, meaning the bottom in a long OrderBlock and the top in a
+        short OrderBlock.
+
+        This method should be called after the check_box_entries method. The method sets the has_stop_break_condition property for the instance of
+        the object accordingly.
+        """
+
+        # Find candles which break the stop level, if any.
+        stop_breaking_candles: pd.DataFrame
+        if self.type == "long":
+            stop_breaking_candles = self.condition_check_window[self.condition_check_window['low'] < self.bottom]
+        else:
+            stop_breaking_candles = self.condition_check_window[self.condition_check_window['high'] > self.top]
+
+        # If there are any candles in the condition check window which break the order block's stop level, the check fails.
+        if len(stop_breaking_candles) > 0:
+            self.has_stop_break_condition = False
+        else:
+            self.has_stop_break_condition = True

@@ -54,4 +54,6 @@
 - Order blocks now store basic information about the formation of the OB, such as the starting index, top and bottom, price exit and reentry, etc.
 - Rudimentary features for performing condition checks were also implemented, mainly a function to form the window to perform the checks on. 
 - Plotting utilities updated to include zooming functionalities, on x and y-axis, on a specific candle specified by an index.
-- Lower order zigzags are now stripped of their markers to provide a tidier chart. 
+- Lower order zigzags are now stripped of their markers to provide a tidier chart.
+#### ver b0.71
+- FVG and block stop break checks implemented. These checks are made using two methods in the OrderBlock method. FVG and block stop break check range is from the starting base candle to the next pivot (next high for ascending pattern and next low for descending pattern)
