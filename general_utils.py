@@ -3,8 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import constants
 
-
-# from algorithm_utils import Box
+from datatypes import Segment
 
 
 def load_local_data(pair_name: str = "BTCUSDT", timeframe: str = "15m") -> pd.DataFrame:
@@ -207,17 +206,32 @@ class PlottingTool:
                            opacity=0.5,
                            name="FVG")
 
+    def draw_segment_bbox(self, segment: Segment):
+        """
+        This method draws a hollow blue bounding box for a segment that will be processed in the backtest.
+        Args:
+            segment: The segment to be drawn
+        """
+        self.fig.add_shape(type="rect",
+                           x0=segment.start_pdi - 1,
+                           y0=segment.bottom_price,
+                           x1=segment.end_pdi + 1,
+                           y1=segment.top_price,
+                           line=dict(
+                               width=2,  # Border width
+                               color='yellow'  # Border color
+                           ),
+                           name="Segment")
+
     def show(self, title: str = 'Price Chart',
              xaxis_title: str = 'Date',
              yaxis_title: str = 'Price'):
-
         self.fig.update_layout(title=title,
                                xaxis_title=xaxis_title,
                                yaxis_title=yaxis_title,
                                xaxis_rangeslider_visible=False)
 
         self.fig.show()
-
 
 def convert_timestamp_to_readable(timestamp: pd.Timestamp):
     utc = timestamp.to_pydatetime()
@@ -232,8 +246,7 @@ def convert_timestamp_to_readable(timestamp: pd.Timestamp):
 
     return readable_format
 
-
-# This function finds the higher timeframe necessary to find the starting point
+    # This function finds the higher timeframe necessary to find the starting point
 def find_higher_timeframe(lower_timeframe):
     for i, key in enumerate(constants.timeframe_minutes.keys()):
         if key == lower_timeframe:
