@@ -1,9 +1,10 @@
-from typing import Optional, NamedTuple
+from typing import Optional
+
 import pandas as pd
 
+import constants
 from datatypes import *
 from general_utils import log_message as log_message_general
-import constants
 
 
 class Algo:
@@ -14,17 +15,22 @@ class Algo:
         self.zigzag_df: Optional[pd.DataFrame] = None
 
         # pbos_indices and choch_indices is a list which stores the PBOS and CHOCH's being moved due to shadows breaking the most recent lows/highs
-        self.pbos_indices = []
-        self.choch_indices = []
+        self.pbos_indices: list[int] = []
+        self.choch_indices: list[int] = []
 
-        # Indices of NONBROKEN LPL's. This means only LPL's that get updated to the next one in the calc_broken_lpl method are added here.
-        self.lpl_indices = {
+        # Indices of NON-BROKEN LPL's. This means only LPL's that get updated to the next one in the calc_broken_lpl method are added here.
+        self.lpl_indices: dict[str, list] = {
             "peak": [],
             "valley": []
         }
 
         # h_o_indices indicates the indices of the peaks and valleys in the higher order zigzag
-        self.h_o_indices = []
+        self.h_o_indices: list[int] = []
+
+        # This is a list that will contain all the segments to be processed in the final backtest. Each segment is a datatype with its start and end
+        # PDI's specified, and a top and bottom price for plotting purposes. Segments end at PBOS_CLOSE events and start at the low/high before the
+        # PBOS which they closed above/below (Ascending/Descending)
+        self.segments: list[Segment] = []
 
         # starting_pdi is the starting point of the entire pattern, calculated using __init_pattern_start_pdi. This method is
         # executed in the calc_h_o_zigzag method.
@@ -146,7 +152,7 @@ class Algo:
 
         return self.zigzag_df.iloc[zigzag_idx + delta].pdi
 
-    def detect_first_broken_lpl(self, search_window_start_pdi: int) -> Union[None, pd.Series]:
+    def detect_first_broken_lpl(self, search_window_start_pdi: int) -> Union[None, tuple[pd.Series, int]]:
         """
         Calculates the LPL's and then broken LPL's in a series of zigzag pivots.
 
@@ -183,8 +189,9 @@ class Algo:
 
             # Breaking
             if breaking_condition:
-                # Return the LPL which was broken to the list of valley LPL's
-                return self.zigzag_df[self.zigzag_df.pdi == breaking_pdi].iloc[0]
+                # Return the LPL which was broken, as well as the breaking candle's PDI. The PDI is later used in segments to indicate which candle
+                # the order blocks can be entered after.
+                return self.zigzag_df[self.zigzag_df.pdi == breaking_pdi].iloc[0], row.pdi
 
             # Extension
             if extension_condition:
@@ -308,7 +315,12 @@ class Algo:
 
         The method then enters a loop where it checks for breaking sentiments (either PBOS_SHADOW, CHOCH_SHADOW, PBOS_CLOSE, CHOCH_CLOSE or NONE)
         and updates the latest PBOS and CHOCH thresholds accordingly if a shadow has broken a PBOS or CHOCH. If a PBOS_CLOSE or CHOCH_CLOSE sentiment
-        is detected, the method identifies the extremum point and adds it to the higher order indices, and then resets the starting point for finding higher order pivots.
+        is detected, the method identifies the extremum point and adds it to the higher order indices, and then resets the starting point for finding
+        higher order pivots.
+
+        Any PBOS_CLOSE events will trigger a segment creation. The segment is then added to the list of segments. A segment is a region within which
+        the order blocks aren't invalidated. This means that the trades can be safely entered in each segment independently without worrying about
+        OB updates.
 
         The loop continues until no more candles are found that break the PBOS or CHOCH even with a shadow.
 
@@ -341,12 +353,15 @@ class Algo:
             self.log_message("", v=1)
 
             # Find the first broken LPL after the starting point and the region starting point
-            broken_lpl = self.detect_first_broken_lpl(pattern_start_pdi)
+            broken_lpl_output_set = self.detect_first_broken_lpl(pattern_start_pdi)
 
             # If no broken LPL can be found, just quit
-            if broken_lpl is None:
+            if broken_lpl_output_set is None:
                 self.log_message("Reached end of chart, no more broken LPL's.", v=1)
                 break
+            else:
+                broken_lpl = broken_lpl_output_set[0]
+                lpl_breaking_pdi: int = broken_lpl_output_set[1]
 
             self.log_message("Starting pattern at", pattern_start_pdi, v=3)
             self.log_message("Broken LPL is at", broken_lpl.pdi, v=3)
@@ -447,9 +462,25 @@ class Algo:
                 # Essentially reset the algorithm
                 latest_pbos_pdi = None
 
+                # The segment is added to the list of segments here. Each segment starts at the pivot before the high that was just broken by a candle
+                # closing above it. The segment ends at the PBOS_CLOSE event, at the candle that closed above the high. The -3 index is used because
+                # there are two points after it: The high that was just broken, and the extremum that was added because the high was broken; therefore
+                # we need the THIRD to last pivot.
+                segment_to_add: Segment = Segment(start_pdi=self.h_o_indices[-3],
+                                                  end_pdi=breaking_pdi - 1,
+                                                  ob_leg_start_pdi=self.h_o_indices[-3],
+                                                  ob_leg_end_pdi=self.h_o_indices[-2],
+                                                  top_price=latest_pbos_threshold,
+                                                  bottom_price=latest_choch_threshold,
+                                                  ob_formation_start_pdi=lpl_breaking_pdi + 1,
+                                                  type=trend_type)
+                self.segments.append(segment_to_add)
+
                 # New lowest low is our CHOCH.
                 latest_choch_pdi = self.h_o_indices[-1]
                 latest_choch_threshold = self.zigzag_df[self.zigzag_df.pdi == latest_choch_pdi].iloc[0].pivot_value
+
+
 
             # If a CHOCH has happened, this means the pattern has inverted and should be restarted with the last LPL before the candle which closed
             # below the CHOCH.
@@ -469,7 +500,7 @@ class Algo:
                 self.log_message("Setting pattern start to", pattern_start_pdi, v=1)
 
                 # Essentially reset the algorithm
-                latest_choch_pdi = pattern_start_pdi
+                latest_choch_pdi = self.h_o_indices[-1]
                 latest_choch_threshold = self.zigzag_df[self.zigzag_df.pdi == latest_choch_pdi].iloc[0].pivot_value
 
                 latest_pbos_pdi = None
@@ -584,12 +615,20 @@ class OrderBlock:
         self.top = base_candle.high
         self.bottom = base_candle.low
 
+        if self.type == "long":
+            self.entry_price = self.top
+        else:
+            self.entry_price = self.bottom
+
         self.is_valid = True
         self.price_exit_index = None
         self.price_reentry_indices = []
         self.condition_check_window = None
         self.has_fvg_condition = None
         self.has_stop_break_condition = None
+        self.entry_pdi = None
+        self.qty = None
+        self.status = "ACTIVE"
 
         self.times_moved = 0
 
@@ -645,8 +684,8 @@ class OrderBlock:
 
     def form_condition_check_window(self, pair_df: pd.DataFrame) -> None:
         """
-        Method to form the condition check window for the box. This check window is used to check the order block confirmation conditions (FVG and price
-        breaking, refer to the check_x_condition methods). The check_box_entries method should be called before this method.
+        Method to form the condition check window for the box. This check window is used to check the order block confirmation conditions
+        (FVG and price breaking, refer to the check_x_condition methods). The check_box_entries method should be called before this method.
 
         Args
             pair_df (pd.DataFrame): The DataFrame containing the price data.
@@ -741,3 +780,107 @@ class OrderBlock:
             self.has_stop_break_condition = False
         else:
             self.has_stop_break_condition = True
+
+    def enter(self, entry_pdi: int):
+        """
+        Method to enter the OB. This method sets the current OB status to "ENTERED", and registers the entry PDI, entry price, and quantity of the
+        entry.
+
+        Args:
+            entry_pdi (int): The PDI at which the entry is made
+            entry_price (float): The price at which the entry is made
+        """
+
+        self.entry_pdi = entry_pdi
+        self.qty = constants.used_capital / self.entry_price
+        self.status = "ENTERED"
+
+
+class Segment:
+    """
+    A segment is a series of candles during which the order blocks specified in Segment.ob_list do not change, so it would be safe to check for
+    entry to these order blocks WITHIN this segment. After the expiration candle of the segment, indicated by Segment.end_pdi, entry to the order
+    blocks isn't permitted, and we move on to the next segment.
+    """
+
+    def __init__(self, start_pdi: int,
+                 end_pdi: int,
+                 ob_leg_start_pdi: int,
+                 ob_leg_end_pdi: int,
+                 top_price: float,
+                 bottom_price: float,
+                 ob_formation_start_pdi: int,
+                 type: str):
+        self.end_pdi = end_pdi
+        self.start_pdi = start_pdi
+        self.ob_leg_start_pdi = ob_leg_start_pdi
+        self.ob_leg_end_pdi = ob_leg_end_pdi
+        self.top_price = top_price
+        self.bottom_price = bottom_price
+        self.ob_formation_start_pdi = ob_formation_start_pdi
+        self.type = type
+
+        self.ob_list: list[OrderBlock] = []
+        self.pair_df: pd.DataFrame = pd.DataFrame()
+
+    def __repr__(self):
+        return f"{self.type.capitalize()} segment starting at {self.start_pdi} ending at {self.end_pdi} OB formation at {self.ob_formation_start_pdi}"
+
+    def filter_candlestick_range(self, algo: Algo):
+        """
+        This method defines the range of pair_df which is used to find box entries. This is useful for checking order block entries. This section is
+        defined as the candles between the OB formation start and the end of the segment, inclusive. The inclusivity is important because in the code
+        a segment's bounds are defined as such.
+        """
+        self.pair_df = algo.pair_df.iloc[self.ob_formation_start_pdi:self.end_pdi + 1]
+
+    def find_order_blocks(self, algo: Algo):
+        """
+        This method identifies the order blocks specific to the segment by taking the entire Algo object as an input, as many of its properties and
+        methods are useful here, and it would be redundant to pass around multiple inputs and methods. This method populates the Segment.ob_list
+        object with a list of order blocks that are only valid within this segment.
+
+        Args:
+            algo: The Algo object
+        """
+
+        # For testing and safety purposes, the ob_list property is reset.
+        self.ob_list = []
+
+        # base_candle_type is the type of the pivot that is used to filter the zigzag_df dataframe for the correct pivot type. In ascending segments
+        # (patterns) the type is valley, and in descending segments it's peak.
+        base_pivot_type = "valley" if self.type == "ascending" else "peak"
+
+        for pivot in algo.zigzag_df[(algo.zigzag_df.pivot_type == base_pivot_type) &
+                                    (self.ob_leg_start_pdi <= algo.zigzag_df.pdi) &
+                                    (algo.zigzag_df.pdi <= self.ob_leg_end_pdi)].itertuples():
+
+            # This try-except block is used to determine the window that is used for finding replacement order blocks in the chart. Currently, the
+            # window spans from the very first base candle (the pivot found using the outer loop) to the lower-order pivot immediately after it.
+            # The except clause catches the error in case we reach the end of the chart and no more next pivots exist, in which case the end of the
+            # search window is set to the last candle of the whole dataset.
+            try:
+                next_pivot_pdi = algo.find_relative_pivot(pivot.pdi, 1)
+                replacement_ob_threshold_pdi = next_pivot_pdi
+            except IndexError:
+                replacement_ob_threshold_pdi = algo.pair_df.last_valid_index()
+
+            # times_moved indicates the times the algorithm had to move the base candle to find a replacement order block.
+            times_moved = 0
+            for base_candle_pdi in range(pivot.pdi, replacement_ob_threshold_pdi):
+                base_candle = algo.pair_df.iloc[base_candle_pdi]
+                ob = OrderBlock(base_candle, "long" if base_pivot_type == "valley" else "short")
+
+                # the check_box_entries method finds any entry point to each box. These entry points can later be used and we can check if the entries
+                # are within the respective segments. This method also sets the condition check window at the end, which is used to check if the boxes
+                # satisfy the confirmation conditions.
+                ob.check_box_entries(algo.pair_df)
+                ob.check_fvg_condition()
+                ob.check_stop_break_condition()
+
+                if ob.has_fvg_condition and ob.has_stop_break_condition:
+                    ob.times_moved = times_moved
+                    self.ob_list.append(ob)
+                    break
+
+                times_moved += 1

@@ -71,9 +71,3 @@ class FVG(NamedTuple):
     middle_candle: int
     fvg_lower: float
     fvg_upper: float
-
-class Segment(NamedTuple):
-    start_pdi: int
-    end_pdi: int
-    top_price: float
-    bottom_price: float

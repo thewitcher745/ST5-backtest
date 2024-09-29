@@ -3,8 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import constants
 
-from datatypes import Segment
-
 
 def load_local_data(pair_name: str = "BTCUSDT", timeframe: str = "15m") -> pd.DataFrame:
     hdf_path: str = f"./cached_data/{pair_name}-{timeframe}.hdf5"
@@ -206,16 +204,16 @@ class PlottingTool:
                            opacity=0.5,
                            name="FVG")
 
-    def draw_segment_bbox(self, segment: Segment):
+    def draw_segment_bbox(self, segment):
         """
         This method draws a hollow blue bounding box for a segment that will be processed in the backtest.
         Args:
             segment: The segment to be drawn
         """
         self.fig.add_shape(type="rect",
-                           x0=segment.start_pdi - 1,
+                           x0=segment.start_pdi,
                            y0=segment.bottom_price,
-                           x1=segment.end_pdi + 1,
+                           x1=segment.end_pdi,
                            y1=segment.top_price,
                            line=dict(
                                width=2,  # Border width
@@ -233,6 +231,7 @@ class PlottingTool:
 
         self.fig.show()
 
+
 def convert_timestamp_to_readable(timestamp: pd.Timestamp):
     utc = timestamp.to_pydatetime()
 
@@ -247,6 +246,8 @@ def convert_timestamp_to_readable(timestamp: pd.Timestamp):
     return readable_format
 
     # This function finds the higher timeframe necessary to find the starting point
+
+
 def find_higher_timeframe(lower_timeframe):
     for i, key in enumerate(constants.timeframe_minutes.keys()):
         if key == lower_timeframe:

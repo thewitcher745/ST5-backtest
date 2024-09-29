@@ -13,3 +13,5 @@ timeframe_minutes = {
     "4h": 240,
     "1d": 1440
 }
+
+used_capital = 1000

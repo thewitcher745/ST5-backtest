@@ -57,3 +57,12 @@
 - Lower order zigzags are now stripped of their markers to provide a tidier chart.
 #### ver b0.71
 - FVG and block stop break checks implemented. These checks are made using two methods in the OrderBlock method. FVG and block stop break check range is from the starting base candle to the next pivot (next high for ascending pattern and next low for descending pattern)
+
+
+### ver b0.8
+- Segments and their respective OB's implemented. Segments are formed in each region where a PBOS_CLOSE event takes place. The segment starts at the pivot before the PBOS and ends on the candle before the candle that closes above/below the PBOS, making it a BOS.
+- The significance of segments is that in the candles within them, the order block aren't updated or invalidated or modified in any way. So in a certain section of a segment, we can safely check for entries to the order blocks within that segment without having to worry about OB updates.
+- A segment's order blocks form on its first leg only, the first leg being the pivot before the PBOS to the PBOS itself. This means that only the lower order lows (Ascending patterns) or lower order highs (Descending patterns) are used to form the OB's. This is to prevent the OB's from being formed on the opposite-direction trend, which goes against the concept of the strategy.
+- A segment's order blocks can only register entries after a certain point in the candles within the segment. This certain point is exactly the lower order pivot that breaks the LPL, forming the initial PBOS. This is to prevent look-ahead bias, as the order blocks wouldn't have formed in the first place if the LPL hadn't been broken. Therefore only order blocks that have their entries after this value and before the end of the segments are considered eligible for entry registration.
+- Plotting tool updated to include segment plotting, which is bounding box with a distinguishable color.
+- Order block entry registry implemented. This method uses a constant value for the used capital which is queries from the constants.py file currently. This can later be changed to include dynamic capital allocation and much more.
