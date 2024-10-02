@@ -599,7 +599,7 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
 
 
 class OrderBlock:
-    def __init__(self, base_candle: Union[pd.Series, Candle], ob_type: str):
+    def __init__(self, base_candle: Union[pd.Series, Candle], stoploss: float, ob_type: str):
         if isinstance(base_candle, Candle):
             self.start_index = base_candle.pdi
         elif isinstance(base_candle, pd.Series):
@@ -607,28 +607,27 @@ class OrderBlock:
         elif isinstance(base_candle, tuple):
             self.start_index = base_candle.Index
 
+        # Identification
         self.base_candle = base_candle
         self.type = ob_type
-        self.id = f"{self.start_index}/" + gen_utils.convert_timestamp_to_readable(base_candle.time)
+        self.id = f"OB{self.start_index}/" + gen_utils.convert_timestamp_to_readable(base_candle.time)
         self.id += "L" if ob_type == "long" else "S"
 
+        # Geometry
         self.top = base_candle.high
         self.bottom = base_candle.low
+        self.height = self.top - self.bottom
 
-        if self.type == "long":
-            self.entry_price = self.top
-        else:
-            self.entry_price = self.bottom
+        # The position formed by the OrderBLock
+        self.position = Position(stoploss, self)
 
+        # Checks and flags
         self.is_valid = True
         self.price_exit_index = None
         self.price_reentry_indices = []
         self.condition_check_window = None
         self.has_fvg_condition = None
         self.has_stop_break_condition = None
-        self.entry_pdi = None
-        self.qty = None
-        self.status = "ACTIVE"
 
         self.times_moved = 0
 
@@ -781,20 +780,6 @@ class OrderBlock:
         else:
             self.has_stop_break_condition = True
 
-    def enter(self, entry_pdi: int):
-        """
-        Method to enter the OB. This method sets the current OB status to "ENTERED", and registers the entry PDI, entry price, and quantity of the
-        entry.
-
-        Args:
-            entry_pdi (int): The PDI at which the entry is made
-            entry_price (float): The price at which the entry is made
-        """
-
-        self.entry_pdi = entry_pdi
-        self.qty = constants.used_capital / self.entry_price
-        self.status = "ENTERED"
-
 
 class Segment:
     """
@@ -867,9 +852,15 @@ class Segment:
 
             # times_moved indicates the times the algorithm had to move the base candle to find a replacement order block.
             times_moved = 0
+
+            # The stoploss is set at the pivot value of the INITIAL box that was found, since that's the box which has the liquidity. This value is
+            # passed to the OB instantiation line as the stoploss value, which in turn goes to the Position attribute within it.
+            initial_pivot_candle_stoploss = pivot.pivot_value
             for base_candle_pdi in range(pivot.pdi, replacement_ob_threshold_pdi):
                 base_candle = algo.pair_df.iloc[base_candle_pdi]
-                ob = OrderBlock(base_candle, "long" if base_pivot_type == "valley" else "short")
+                ob = OrderBlock(base_candle=base_candle,
+                                stoploss=initial_pivot_candle_stoploss,
+                                ob_type="long" if base_pivot_type == "valley" else "short")
 
                 # the check_box_entries method finds any entry point to each box. These entry points can later be used and we can check if the entries
                 # are within the respective segments. This method also sets the condition check window at the end, which is used to check if the boxes
@@ -878,9 +869,123 @@ class Segment:
                 ob.check_fvg_condition()
                 ob.check_stop_break_condition()
 
-                if ob.has_fvg_condition and ob.has_stop_break_condition:
+                # This check ensures that the order block being processed is totally valid to be used AFTER the formation of the pattern, that means
+                # that the order block has either A) had no reentry at all or B) has had its reentry after the formation of the pattern.
+                ob_is_valid_in_formation_region = len(ob.price_reentry_indices) == 0 or ob.price_reentry_indices[0] > self.ob_formation_start_pdi
+                if ob.has_fvg_condition and ob.has_stop_break_condition and ob_is_valid_in_formation_region:
                     ob.times_moved = times_moved
                     self.ob_list.append(ob)
                     break
 
                 times_moved += 1
+
+
+class Position:
+    def __init__(self, stoploss: float, parent_ob: OrderBlock):
+        # Entries, targets and stoploss
+        self.parent_ob = parent_ob
+        self.entry_price = parent_ob.top if parent_ob.type == "long" else parent_ob.bottom
+        self.stoploss = stoploss
+        self.position_height = abs(self.entry_price - self.stoploss)
+        self.type = parent_ob.type
+
+        self.status: str = "ACTIVE"
+        self.entry_pdi = None
+        self.qty: float = 0
+        self.highest_target: int = 0
+        self.target_hit_pdis: list[int] = []
+
+        if self.type == "long":
+            self.target_list = [
+                self.entry_price + 1 * self.position_height,
+                self.entry_price + 2 * self.position_height,
+                self.entry_price + 3 * self.position_height,
+            ]
+        else:
+            self.target_list = [
+                self.entry_price - 1 * self.position_height,
+                self.entry_price - 2 * self.position_height,
+                self.entry_price - 3 * self.position_height,
+            ]
+
+    def find_entry_within_segment(self, segment: Segment) -> Union[int, None]:
+        """
+        This method analyzes the candles within the segment's entry region to see if any candle enters the position.
+
+        Args:
+            segment (Segment): The segment with the filtered candles ready to be checked for entry
+        """
+        if self.type == "long":
+            entering_candles: pd.DataFrame = segment.pair_df[segment.pair_df.low <= self.entry_price]
+        else:
+            entering_candles: pd.DataFrame = segment.pair_df[segment.pair_df.high >= self.entry_price]
+
+        if len(entering_candles) > 0:
+            return entering_candles.first_valid_index()
+        else:
+            return None
+
+    def enter(self, entry_pdi: int):
+        """
+        Method to enter the OB. This method sets the current OB status to "ENTERED", and registers the entry PDI, entry price, and quantity of the
+        entry.
+
+        Args:
+            entry_pdi (int): The PDI at which the entry is made
+        """
+
+        self.entry_pdi = entry_pdi
+        self.qty = constants.used_capital / self.entry_price
+        self.status = "ENTERED"
+
+    def register_target(self, target_id: int, target_registry_pdi: int):
+        """
+        This method registers a new highest target on the position to later use in calculating the PNL. If the target being registered is the highest
+        target, it also triggers an exit command.
+
+        Args:
+            target_id (int): The ID of the target to register. Must be higher than 0 since the default value is zero.
+            target_registry_pdi (int): The PDI of the candle registering the target(s)
+        """
+
+        # First, for safety, check if the target being registered is actually higher than the highest registered target
+        if target_id > self.highest_target:
+            # Register all the non-hit targets with the PDI of the candle hitting them
+            self.target_hit_pdis.extend([target_registry_pdi] * (target_id - self.highest_target))
+
+            self.highest_target = target_id
+
+            # If the target_id is the final target, also trigger an exit event.
+            if target_id == len(self.target_list):
+                self.exit(exit_code="FULL_TARGET")
+
+    def register_stoploss(self):
+        """
+        This method triggers a stoploss registration on the position. The exit_code STOPLOSS is then used to call the exit function and calculate the
+        PNL
+        """
+        self.exit(exit_code="STOPLOSS")
+
+    def exit(self, exit_code: str):
+        """
+        This method exits an entered order block with an exit code. If the exit code is "STOPLOSS" that means the position is exiting due to hitting
+        the stoploss level. Otherwise, if the exit code is "FULL_TARGET" that means the last target has been hit and therefore the maximum possible
+        profit should be registered. If a "STOPLOSS" event happens, the profit is calculated using the highest registered target, accounting for
+        losses from the stoploss and gains from the targets separately. The net profit is then registered into the Position.net_profit property.
+
+        Args:
+            exit_code (str): How the position has been exit.
+        """
+        # If the position is exiting due to hitting a stoploss
+        if exit_code == "STOPLOSS":
+            # If we do have any registered targets, set the highest registered target as the final status
+            if self.highest_target > 0:
+                self.status = f"TARGET_{self.highest_target}"
+
+            # Otherwise, just report a STOPLOSS
+            else:
+                self.status = "STOPLOSS"
+
+        # If a full target has been hit, report it as such
+        elif exit_code == "FULL_TARGET":
+            self.status = f"FULL_TARGET_{self.highest_target}"
