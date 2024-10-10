@@ -1,5 +1,5 @@
 allowed_verbosity = 3
-starting_point_backtrack_window = 300
+starting_point_backtrack_window = 600
 
 # The "interval" between the low and high timeframe, 2 means that the low timeframe is 2 times smaller than the high timeframe,
 # as in 15m becomes 4h, 1h becomes 1d, etc.

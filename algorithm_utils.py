@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 
 import pandas as pd
 
@@ -512,6 +512,36 @@ class Algo:
 
         # return self.h_o_indices
 
+    def convert_pdis_to_times(self, pdis: Union[int, list[int]]) -> Union[pd.Timestamp, list[pd.Timestamp]]:
+        """
+        Convert a list (or a single) of PDIs to their corresponding times using algo.pair_df.
+
+        Args:
+            pdis (list[int]): List of PDIs to convert.
+            pair_df (pd.DataFrame): The pair_df DataFrame to use for the conversion.
+
+        Returns:
+            list[pd.Timestamp]: List of corresponding times.
+        """
+
+        if pdis is None:
+            return None
+
+        if not isinstance(pdis, list):
+            pdis = [pdis]
+
+        if len(pdis) == 0:
+            return []
+
+        # Map PDIs to their corresponding times
+        times = [self.pair_df.iloc[pdi].time for pdi in pdis]
+
+        # If it's a singular entry, return it as a single timestamp
+        if len(times) == 1:
+            return times[0]
+
+        return list(times)
+
 
 def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
                            ltf_start_time: pd.Timestamp,
@@ -894,6 +924,7 @@ class Position:
         self.qty: float = 0
         self.highest_target: int = 0
         self.target_hit_pdis: list[int] = []
+        self.exit_pdi = None
 
         if self.type == "long":
             self.target_list = [
@@ -914,6 +945,9 @@ class Position:
 
         Args:
             segment (Segment): The segment with the filtered candles ready to be checked for entry
+
+        Returns:
+            Union[int, None]: The index of the candle entering the position, or None if no candle enters the position
         """
         if self.type == "long":
             entering_candles: pd.DataFrame = segment.pair_df[segment.pair_df.low <= self.entry_price]
@@ -955,10 +989,6 @@ class Position:
 
             self.highest_target = target_id
 
-            # If the target_id is the final target, also trigger an exit event.
-            if target_id == len(self.target_list):
-                self.exit(exit_code="FULL_TARGET")
-
     def register_stoploss(self):
         """
         This method triggers a stoploss registration on the position. The exit_code STOPLOSS is then used to call the exit function and calculate the
@@ -966,7 +996,7 @@ class Position:
         """
         self.exit(exit_code="STOPLOSS")
 
-    def exit(self, exit_code: str):
+    def exit(self, exit_code: Literal["STOPLOSS", "FULL_TARGET"], exit_pdi: int):
         """
         This method exits an entered order block with an exit code. If the exit code is "STOPLOSS" that means the position is exiting due to hitting
         the stoploss level. Otherwise, if the exit code is "FULL_TARGET" that means the last target has been hit and therefore the maximum possible
@@ -975,9 +1005,14 @@ class Position:
 
         Args:
             exit_code (str): How the position has been exit.
+            exit_pdi (int): At which candle the exit happens
         """
+
+        self.exit_pdi = exit_pdi
+
         # If the position is exiting due to hitting a stoploss
         if exit_code == "STOPLOSS":
+
             # If we do have any registered targets, set the highest registered target as the final status
             if self.highest_target > 0:
                 self.status = f"TARGET_{self.highest_target}"
@@ -989,3 +1024,78 @@ class Position:
         # If a full target has been hit, report it as such
         elif exit_code == "FULL_TARGET":
             self.status = f"FULL_TARGET_{self.highest_target}"
+
+    def does_candle_stop(self, candle):
+        """
+        This method checks if the candle stops the position. This is done by checking if the candle's low is lower than the stoploss in the case of
+        long positions, and if the candle's high is higher than the stoploss in the case of short positions.
+
+        Args:
+            candle (pd.Series): The candle to check for stopping
+
+        Returns:
+            bool: True if the candle stops the position, False otherwise
+        """
+
+        if self.type == "long":
+            return candle.low <= self.stoploss
+        else:
+            return candle.high >= self.stoploss
+
+    def detect_candle_sentiment(self, candle: pd.Series) -> tuple[str, Union[int, None]]:
+        """
+        This method checks which target (or stoploss) the candle argument breaks. The method is used to determine if the position should be exited.
+        This method uses the candle's color to determine which of the stoploss or targets were hit first.
+
+        Args:
+            candle (pd.Series): The candle to check for target/stoploss
+
+        Returns:
+            tuple: A tuple containing a sentiment ("TARGET" , "FULL_TARGET", "STOPLOSS" or "NONE") and an int, for the case where the candle registers a
+            target. If a candle registers a stoploss, the int is 0.
+        """
+
+        def last_element_bigger_than(targets, price):
+            for i in reversed(range(len(targets))):
+                if targets[i] >= price:
+                    return i + 1
+            return 0
+
+        def last_element_smaller_than(targets, price):
+            for i in reversed(range(len(targets))):
+                if targets[i] <= price:
+                    return i + 1
+            return 0
+
+        # Long order blocks
+        if self.type == "long":
+            highest_target = last_element_smaller_than(self.target_list, candle.high)
+        # Short order blocks
+        else:
+            highest_target = last_element_bigger_than(self.target_list, candle.low)
+
+        # If the candle is green, it means the price is going up, and the bottom of the box should be checked first
+        if candle.close > candle.open:
+            if self.does_candle_stop(candle):
+                return "STOPLOSS", None
+
+            if highest_target > self.highest_target:
+                if highest_target < len(self.target_list):
+                    return "TARGET", highest_target
+
+                elif highest_target == len(self.target_list):
+                    return "FULL_TARGET", None
+
+        # If the candle is red, it means the price is going down, and the top of the box should be checked first
+        else:
+            if highest_target > self.highest_target:
+                if highest_target < len(self.target_list):
+                    return "TARGET", highest_target
+
+                elif highest_target == len(self.target_list):
+                    return "FULL_TARGET", None
+
+            if self.does_candle_stop(candle):
+                return "STOPLOSS", None
+
+        return "NONE", None

@@ -66,3 +66,10 @@
 - A segment's order blocks can only register entries after a certain point in the candles within the segment. This certain point is exactly the lower order pivot that breaks the LPL, forming the initial PBOS. This is to prevent look-ahead bias, as the order blocks wouldn't have formed in the first place if the LPL hadn't been broken. Therefore only order blocks that have their entries after this value and before the end of the segments are considered eligible for entry registration.
 - Plotting tool updated to include segment plotting, which is bounding box with a distinguishable color.
 - Order block entry registry implemented. This method uses a constant value for the used capital which is queries from the constants.py file currently. This can later be changed to include dynamic capital allocation and much more.
+
+
+### ver b.9
+- Position exiting fully implemented. Positions can now exit when they either achieve FULL_TARGET status or when they hit the stop loss. 
+- Before a stoploss of a full target event, the highest target hit is calculated and registered. Each target hit time is registered in the Position object instance for later validation
+- Rudimentary report generation using excel files implemented. The report contains data on the final status of positions, their type, entry and exit times, entry and exit prices, targets hit, and most other usefulvalidation sources.
+- The exiting and report generation code is currently implemented directly in the main Jupyter notebook, but will later be moved to a separate module for better organization and readability.
