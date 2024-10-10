@@ -68,7 +68,7 @@
 - Order block entry registry implemented. This method uses a constant value for the used capital which is queries from the constants.py file currently. This can later be changed to include dynamic capital allocation and much more.
 
 
-### ver b.9
+### ver b0.9
 - Position exiting fully implemented. Positions can now exit when they either achieve FULL_TARGET status or when they hit the stop loss. 
 - Before a stoploss or a full target event, the highest target hit is calculated and registered. Each target hit time is registered in the Position object instance for later validation
 - Rudimentary report generation using excel files implemented. The report contains data on the final status of positions, their type, entry and exit times, entry and exit prices, targets hit, and most other usefulvalidation sources.
