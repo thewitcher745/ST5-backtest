@@ -925,6 +925,8 @@ class Position:
         self.highest_target: int = 0
         self.target_hit_pdis: list[int] = []
         self.exit_pdi = None
+        self.portioned_qty = []
+        self.net_profit = None
 
         if self.type == "long":
             self.target_list = [
@@ -1010,6 +1012,10 @@ class Position:
 
         self.exit_pdi = exit_pdi
 
+        # Even distribution of quantities
+        self.portioned_qty = [self.qty / len(self.target_list) for target in self.target_list]
+
+        n_targets = len(self.target_list)
         # If the position is exiting due to hitting a stoploss
         if exit_code == "STOPLOSS":
 
@@ -1021,9 +1027,41 @@ class Position:
             else:
                 self.status = "STOPLOSS"
 
+            # If the position is long, this means that we have one loss: a loss from purchasing the asset at entry, and we have two gains: a loss
+            # from selling the remainder of the asset at stoploss and another for selling each portioned quantity at each target hit.
+            if self.type == "long":
+                loss_from_entry = self.entry_price * self.qty
+                gain_from_stop = sum(self.portioned_qty[self.highest_target:]) * self.stoploss
+                gain_from_targets = sum([self.portioned_qty[i] * self.target_list[i] for i in range(self.highest_target)])
+
+                total_position_gain = gain_from_stop + gain_from_targets
+                total_position_loss = loss_from_entry
+
+            # If the position is short, this means that we have one gain: a gain from selling the asset at entry, and we have two losses: a loss from
+            # buying the remainder of the asset at stoploss and another for buying each portioned quantity at each target hit.
+            else:
+                gain_from_entry = self.entry_price * self.qty
+                loss_from_stop = sum(self.portioned_qty[self.highest_target:]) * self.stoploss
+                loss_from_targets = sum([self.portioned_qty[i] * self.target_list[i] for i in range(self.highest_target)])
+
+                total_position_gain = gain_from_entry
+                total_position_loss = loss_from_stop + loss_from_targets
+
         # If a full target has been hit, report it as such
         elif exit_code == "FULL_TARGET":
             self.status = f"FULL_TARGET_{self.highest_target}"
+
+            # If the position has achieved full targets, we have the same codes for calculating net profit, only with the omission of stoploss
+            # loss/gains. All the target calculations will also use the entire target_list property instead of the spliced version
+            if self.type == "long":
+                total_position_loss = self.entry_price * self.qty
+                total_position_gain = sum([qty_target[0] * qty_target[1] for qty_target in zip(self.portioned_qty, self.target_list)])
+
+            else:
+                total_position_gain = self.entry_price * self.qty
+                total_position_loss = sum([qty_target[0] * qty_target[1] for qty_target in zip(self.portioned_qty, self.target_list)])
+
+        self.net_profit = total_position_gain - total_position_loss
 
     def does_candle_stop(self, candle):
         """
