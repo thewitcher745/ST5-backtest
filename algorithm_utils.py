@@ -101,19 +101,19 @@ class Algo:
                 # JUDGING BASED ON CANDLE COLOR
                 # If the candle is green, that means the low value was probably hit before the high value
                 # If the candle is red, that means the high value was probably hit before the low value
-                # This means that if the candle is green, we can extend a valley, and if it's red, we can extend a peak
+                # This means that if the candle is green, we can extend a peak, and if it's red, we can extend a valley
                 # Otherwise the direction must flip
                 if (row.candle_color == 'green' and last_pivot_type == 'valley') or (
                         row.candle_color == 'red' and last_pivot_type == 'peak'):
-                    last_pivot_candle = Candle.create(row)
-
-                else:
                     # Add the last previous pivot to the list of pivots
                     pivots.append(Pivot.create((last_pivot_candle, last_pivot_type)))
 
                     # Update the last pivot's type and value
                     last_pivot_candle = Candle.create(row)
                     last_pivot_type = 'valley' if last_pivot_type == 'peak' else 'peak'
+
+                else:
+                    last_pivot_candle = Candle.create(row)
 
             # Has a same direction pivot been found?
             if peak_extension_condition or valley_extension_condition:
@@ -562,9 +562,13 @@ def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
                or a high
     """
 
-    # Instantiate the Algo object so the functions can be used.
-    truncated_htf_pair_df: pd.DataFrame = htf_pair_df.iloc[-backtrack_window:].reset_index()
+    # The HTF HO zigzag calculation should start "backtrack_window" candles behind the stating timestamp of the LTF data
+    htf_pair_df_candles_before_ltf_start: pd.DataFrame = htf_pair_df[htf_pair_df.time <= ltf_start_time]
+    htf_starting_index: int = htf_pair_df_candles_before_ltf_start.iloc[-1].name - backtrack_window
 
+    truncated_htf_pair_df: pd.DataFrame = htf_pair_df.iloc[htf_starting_index:].reset_index()
+
+    # Instantiate the Algo object so the functions can be used.
     htf_algo = Algo(truncated_htf_pair_df, "HTF Data", allowed_verbosity=0)
     htf_algo.init_zigzag()
     first_zigzag_pivot_pdi: int = htf_algo.zigzag_df.iloc[0].pdi
@@ -575,10 +579,10 @@ def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
     timestamps = htf_algo.zigzag_df[htf_algo.zigzag_df.pdi.isin(htf_h_o_indices)]
 
     # Select the timestamps before the lower timeframe data's starting point
-    timestamps = timestamps[timestamps.time <= ltf_start_time]
+    timestamps = timestamps[timestamps.time >= ltf_start_time]
 
     # The last one along with its type
-    last_timestamp = timestamps.iloc[-1].time
+    last_timestamp = timestamps.iloc[0].time
     pivot_type = "low" if htf_algo.zigzag_df[htf_algo.zigzag_df.time == last_timestamp].iloc[
                               0].pivot_type == "valley" else "high"
 
@@ -610,6 +614,7 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
 
     # The PDI of the candle in the LTF data which corresponds to the exact time found by find_last_htf_ho_pivot. This will be used to create the
     # aggregated candles and find the lowest low/highest high candle depending on starting_pivot_type and filtering pair_df based on that.
+    print(starting_timestamp)
     initial_starting_pdi = original_pair_df[original_pair_df.time == starting_timestamp].iloc[0].name
 
     # This parameter depends on the conversion rate between the LTF and HTF timeframes
@@ -930,15 +935,15 @@ class Position:
 
         if self.type == "long":
             self.target_list = [
-                self.entry_price + 1 * self.position_height,
-                self.entry_price + 2 * self.position_height,
                 self.entry_price + 3 * self.position_height,
+                self.entry_price + 5 * self.position_height,
+                self.entry_price + 7 * self.position_height,
             ]
         else:
             self.target_list = [
-                self.entry_price - 1 * self.position_height,
-                self.entry_price - 2 * self.position_height,
                 self.entry_price - 3 * self.position_height,
+                self.entry_price - 5 * self.position_height,
+                self.entry_price - 7 * self.position_height,
             ]
 
     def find_entry_within_segment(self, segment: Segment) -> Union[int, None]:
