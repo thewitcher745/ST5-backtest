@@ -664,8 +664,14 @@ class OrderBlock:
         self.condition_check_window = None
         self.has_fvg_condition = None
         self.has_stop_break_condition = None
+        self.has_been_replaced = False
 
+        # The number of times the algorithm has tried to find a replacement for this order block
         self.times_moved = 0
+
+        # The ranking of the order block within its segment. Sequential number, meaning the first VALID OB in a segment gets assigned number 1, next
+        # one gets assigned 2, and so on
+        self.ranking_within_segment = 0
 
     def __repr__(self):
         return f"OB {self.id} ({self.type})"
@@ -745,6 +751,9 @@ class OrderBlock:
 
         # aggregated_candle_after represents the candles after the exit candle. This would be a candle with the highest high and lowest low set as
         # its high and low.
+
+        if self.price_exit_index is None:
+            return False
 
         aggregated_candle_after_exit: list = [self.condition_check_window.loc[self.price_exit_index + 1:].low.min(),
                                               self.condition_check_window.loc[self.price_exit_index + 1:].high.max()]
@@ -874,6 +883,10 @@ class Segment:
         # (patterns) the type is valley, and in descending segments it's peak.
         base_pivot_type = "valley" if self.type == "ascending" else "peak"
 
+        # This variable is used to keep track of how many valid order blocks have been found. It is then assigned to each order block within the
+        # segment, so it's ranking in the segment is recorded.
+        valid_ob_counter = 0
+
         for pivot in algo.zigzag_df[(algo.zigzag_df.pivot_type == base_pivot_type) &
                                     (self.ob_leg_start_pdi <= algo.zigzag_df.pdi) &
                                     (algo.zigzag_df.pdi <= self.ob_leg_end_pdi)].itertuples():
@@ -894,6 +907,7 @@ class Segment:
             # The stoploss is set at the pivot value of the INITIAL box that was found, since that's the box which has the liquidity. This value is
             # passed to the OB instantiation line as the stoploss value, which in turn goes to the Position attribute within it.
             initial_pivot_candle_stoploss = pivot.pivot_value
+
             for base_candle_pdi in range(pivot.pdi, replacement_ob_threshold_pdi):
                 base_candle = algo.pair_df.iloc[base_candle_pdi]
                 ob = OrderBlock(base_candle=base_candle,
@@ -910,10 +924,20 @@ class Segment:
                 # This check ensures that the order block being processed is totally valid to be used AFTER the formation of the pattern, that means
                 # that the order block has either A) had no reentry at all or B) has had its reentry after the formation of the pattern.
                 ob_is_valid_in_formation_region = len(ob.price_reentry_indices) == 0 or ob.price_reentry_indices[0] > self.ob_formation_start_pdi
+
                 if ob.has_fvg_condition and ob.has_stop_break_condition and ob_is_valid_in_formation_region:
+                    valid_ob_counter += 1
+
+                    ob.ranking_within_segment = valid_ob_counter
+
                     ob.times_moved = times_moved
+                    ob.has_been_replaced = False
                     self.ob_list.append(ob)
                     break
+
+                else:
+                    ob.has_been_replaced = True
+                    # self.ob_list.append(ob)
 
                 times_moved += 1
 

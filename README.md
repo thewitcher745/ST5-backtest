@@ -76,3 +76,8 @@
 #### ver b0.91
 - Order block exit candle check redesigned. Now for a long position, the exit candle should open inside the OB and close outside of it, instead of just having a high value outside the OB.
 - Checking for broken LPL now does NOT skip the new starting point.
+#### ver b0.92
+- check_fvg_condition now returns False if a proper exit candle (According to ver b0.91) isn't found.
+- Added "Ranking within segment" property to order blocks. This property stores the ranking of the order block within its segment. This is a sequential number which tells us what position the order block holds within all the order blocks in that segment.
+- Added (and temporarily removed) a "Has been replaced?" property to order blocks which could potentially store the order blocks that were replaced (due to the FVG condition not being satisfied) to the output report. This made it easier to track if the replacement process is actually worth it or not.
+- 
