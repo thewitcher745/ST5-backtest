@@ -73,3 +73,6 @@
 - Before a stoploss or a full target event, the highest target hit is calculated and registered. Each target hit time is registered in the Position object instance for later validation
 - Rudimentary report generation using excel files implemented. The report contains data on the final status of positions, their types, net profits, entry and exit times, entry and exit prices, targets hit, and most other usefulvalidation sources.
 - The exiting and report generation code is currently implemented directly in the main Jupyter notebook, but will later be moved to a separate module for better organization and readability.
+#### ver b0.91
+- Order block exit candle check redesigned. Now for a long position, the exit candle should open inside the OB and close outside of it, instead of just having a high value outside the OB.
+- Checking for broken LPL now does NOT skip the new starting point.

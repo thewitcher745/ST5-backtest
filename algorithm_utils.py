@@ -156,6 +156,7 @@ class Algo:
         """
         Calculates the LPL's and then broken LPL's in a series of zigzag pivots.
 
+
         An LPL (For ascending patterns) is registered when a higher high than the highest high since the last LPL is registered. If a lower low than
         the lowest low is registered, the last LPL is considered a broken LPL and registered as such.
 
@@ -179,7 +180,7 @@ class Algo:
 
         check_start_pdi = self.find_relative_pivot(search_window_start_pdi, 2)
 
-        for row in self.zigzag_df[self.zigzag_df.pdi > check_start_pdi].iloc[:-1].itertuples():
+        for row in self.zigzag_df[self.zigzag_df.pdi >= check_start_pdi].iloc[:-1].itertuples():
             if trend_type == "ascending":
                 extension_condition = row.pivot_type == "peak" and row.pivot_value >= extension_value
                 breaking_condition = row.pivot_type == "valley" and row.pivot_value <= breaking_value
@@ -685,8 +686,8 @@ class OrderBlock:
 
         # If the box is of type "long"
         if self.type == "long":
-            # Find the first index where the price exits the box
-            exit_index = check_window[check_window['high'] > self.top].first_valid_index()
+            # Find the first candle where a candle opens inside the OB and closes above it
+            exit_index = check_window[(check_window['close'] > self.top) & (check_window['open'] <= self.top)].first_valid_index()
 
             if exit_index is not None:
                 self.price_exit_index = exit_index
@@ -701,7 +702,9 @@ class OrderBlock:
                     self.is_valid = False
 
         else:  # If the box is of type "short"
-            exit_index = check_window[check_window['low'] < self.bottom].first_valid_index()
+            # Find the first candle where a candle opens inside the OB and closes below it
+            exit_index = check_window[(check_window['close'] < self.bottom) & (check_window['open'] >= self.bottom)].first_valid_index()
+
             if exit_index is not None:
                 self.price_exit_index = exit_index
                 # If an exit is found, check for a reentry into the box after the exit

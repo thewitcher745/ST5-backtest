@@ -1,5 +1,9 @@
 - Make check_box_entries in datatypes.Box use multiple reentries, governed by a universal constant
 - Implement entry and stop-loss prioritization in order block positions
+- Make the LPL breaking functionality use individual candles instead of zigzag pivots (important)
+- Add to backtests: 1) If the orderblock is the first OB in the HO leg 2) Add te moved order blocks to the positions list (True/False)
 
+
++ Make OB exit use candle close or open value instead of shadows. Exit candle should have an open or close inside the OB. Candle color also important.
 + Write a function to consecutively generate zigzag points, so the before, after, etc are easily accessed
 + Higher order zigzag can only be BOS if it simplifies the blue zigzag
