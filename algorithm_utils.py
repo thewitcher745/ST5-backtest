@@ -474,6 +474,7 @@ class Algo:
                                                   top_price=latest_pbos_threshold,
                                                   bottom_price=latest_choch_threshold,
                                                   ob_formation_start_pdi=lpl_breaking_pdi + 1,
+                                                  broken_lpl_pdi=broken_lpl.pdi,
                                                   type=trend_type)
                 self.segments.append(segment_to_add)
 
@@ -842,6 +843,7 @@ class Segment:
                  top_price: float,
                  bottom_price: float,
                  ob_formation_start_pdi: int,
+                 broken_lpl_pdi: int,
                  type: str):
         self.end_pdi = end_pdi
         self.start_pdi = start_pdi
@@ -850,6 +852,7 @@ class Segment:
         self.top_price = top_price
         self.bottom_price = bottom_price
         self.ob_formation_start_pdi = ob_formation_start_pdi
+        self.broken_lpl_pdi = broken_lpl_pdi
         self.type = type
 
         self.ob_list: list[OrderBlock] = []
@@ -887,9 +890,12 @@ class Segment:
         # segment, so it's ranking in the segment is recorded.
         valid_ob_counter = 0
 
+        # Filter pivots of the correct type (valley for ascending, peak for descending) and pivots that are within the first leg. Also omit the pivots
+        # that have a higher PDI than the broken LPL PDI, meaning the boxes that form above the broken LPL in ascending and below the LPL in
+        # descending
         for pivot in algo.zigzag_df[(algo.zigzag_df.pivot_type == base_pivot_type) &
                                     (self.ob_leg_start_pdi <= algo.zigzag_df.pdi) &
-                                    (algo.zigzag_df.pdi <= self.ob_leg_end_pdi)].itertuples():
+                                    (algo.zigzag_df.pdi < self.broken_lpl_pdi)].itertuples():
 
             # This try-except block is used to determine the window that is used for finding replacement order blocks in the chart. Currently, the
             # window spans from the very first base candle (the pivot found using the outer loop) to the lower-order pivot immediately after it.
