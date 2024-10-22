@@ -1,10 +1,10 @@
 from typing import Optional, Literal
-
 import pandas as pd
 
 import constants
 from datatypes import *
 from general_utils import log_message as log_message_general
+import position_prices_setup as setup
 
 
 class Algo:
@@ -200,7 +200,11 @@ class Algo:
 
                 prev_pivot_pdi = self.find_relative_pivot(row.pdi, -1)
                 prev_pivot = self.zigzag_df[self.zigzag_df.pdi == prev_pivot_pdi].iloc[0]
-                self.log_message("Changing breaking_pdi to", prev_pivot.pdi)
+
+                if constants.logs_format == "time":
+                    self.log_message("Changing breaking_pdi to", self.convert_pdis_to_times(prev_pivot.pdi))
+                else:
+                    self.log_message("Changing breaking_pdi to", prev_pivot.pdi)
                 breaking_pdi = prev_pivot.pdi
                 breaking_value = prev_pivot.pivot_value
                 extension_value = row.pivot_value
@@ -339,7 +343,10 @@ class Algo:
         # The first CHOCH is always the starting point, until it is updated when a BOS or a CHOCH is broken.
         latest_choch_pdi = self.starting_pdi
         latest_choch_threshold: float = self.zigzag_df[self.zigzag_df.pdi == self.starting_pdi].iloc[0].pivot_value
-        self.log_message("Added starting point", self.starting_pdi, v=1)
+        if constants.logs_format == "time":
+            self.log_message("Added starting point", self.convert_pdis_to_times(self.starting_pdi), v=1)
+        else:
+            self.log_message("Added starting point", self.starting_pdi, v=1)
 
         # The starting point of each pattern. This resets and changes whenever the pattern needs to be restarted. Unlike self.starting_pdi this DOES
         # change.
@@ -351,21 +358,31 @@ class Algo:
         # The loop which continues until the end of the pattern is reached.
         while True:
             # Spacing between each iteration
-            self.log_message("", v=1)
+            if constants.logs_format == "time":
+                self.log_message("", v=1)
+            else:
+                self.log_message("", v=1)
 
             # Find the first broken LPL after the starting point and the region starting point
             broken_lpl_output_set = self.detect_first_broken_lpl(pattern_start_pdi)
 
             # If no broken LPL can be found, just quit
             if broken_lpl_output_set is None:
-                self.log_message("Reached end of chart, no more broken LPL's.", v=1)
+                if constants.logs_format == "time":
+                    self.log_message("Reached end of chart, no more broken LPL's.", v=1)
+                else:
+                    self.log_message("Reached end of chart, no more broken LPL's.", v=1)
                 break
             else:
                 broken_lpl = broken_lpl_output_set[0]
                 lpl_breaking_pdi: int = broken_lpl_output_set[1]
 
-            self.log_message("Starting pattern at", pattern_start_pdi, v=3)
-            self.log_message("Broken LPL is at", broken_lpl.pdi, v=3)
+            if constants.logs_format == "time":
+                self.log_message("Starting pattern at", self.convert_pdis_to_times(pattern_start_pdi), v=3)
+                self.log_message("Broken LPL is at", self.convert_pdis_to_times(broken_lpl.pdi), v=3)
+            else:
+                self.log_message("Starting pattern at", pattern_start_pdi, v=3)
+                self.log_message("Broken LPL is at", broken_lpl.pdi, v=3)
 
             # If the LPL type is valley, it means the trend type is ascending
             trend_type = "ascending" if broken_lpl.pivot_type == "valley" else "descending"
@@ -381,11 +398,18 @@ class Algo:
 
                 # Add the BOS to the HO indices
                 self.h_o_indices.append(bos_pdi)
-                self.log_message("Added BOS", bos_pdi, v=1)
+                if constants.logs_format == "time":
+                    self.log_message("Added BOS", self.convert_pdis_to_times(bos_pdi), v=1)
+                    self.log_message("HO indices", self.convert_pdis_to_times(self.h_o_indices), v=2)
+                else:
+                    self.log_message("Added BOS", bos_pdi, v=1)
+                    self.log_message("HO indices", self.h_o_indices, v=2)
 
-                self.log_message("HO indices", self.h_o_indices, v=2)
-
-            self.log_message("CHOCH threshold is at", latest_choch_pdi, "BOS threshold is at", latest_pbos_pdi, v=2)
+            if constants.logs_format == "time":
+                self.log_message("CHOCH threshold is at", self.convert_pdis_to_times(latest_choch_pdi), "BOS threshold is at",
+                                 self.convert_pdis_to_times(latest_pbos_pdi), v=2)
+            else:
+                self.log_message("CHOCH threshold is at", latest_choch_pdi, "BOS threshold is at", latest_pbos_pdi, v=2)
 
             # Add the first found PBOS to the list as that is needed to kickstart the h_o_zigzag
             self.pbos_indices.append(bos_pdi)
@@ -406,7 +430,11 @@ class Algo:
             # method, where CLOSE sentiments are given priority over SHADOW ), update the latest PBOS pdi and threshold (level). Note that since this
             # statement doesn't set latest_pbos_pdi to None, the pattern will not restart.
             if breaking_sentiment == "PBOS_SHADOW":
-                self.log_message("PBOS #", latest_pbos_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
+                if constants.logs_format == "time":
+                    self.log_message("PBOS #", self.convert_pdis_to_times(latest_pbos_pdi), "broken by candle shadow at index",
+                                     self.convert_pdis_to_times(breaking_pdi), v=2)
+                else:
+                    self.log_message("PBOS #", latest_pbos_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
 
                 latest_pbos_pdi = breaking_pdi
                 latest_pbos_threshold = self.pair_df.iloc[breaking_pdi].high if trend_type == "ascending" else \
@@ -414,7 +442,11 @@ class Algo:
 
             # If a candle breaks the CHOCH with its shadow (And ONLY its shadow, not its close value), update the latest CHOCH pdi and threshold
             elif breaking_sentiment == "CHOCH_SHADOW":
-                self.log_message("CHOCH #", latest_choch_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
+                if constants.logs_format == "time":
+                    self.log_message("CHOCH #", self.convert_pdis_to_times(latest_choch_pdi), "broken by candle shadow at index",
+                                     self.convert_pdis_to_times(breaking_pdi), v=2)
+                else:
+                    self.log_message("CHOCH #", latest_choch_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
 
                 latest_choch_pdi = breaking_pdi
                 latest_choch_threshold = self.pair_df.iloc[breaking_pdi].low if trend_type == "ascending" else \
@@ -424,9 +456,16 @@ class Algo:
             # the latest HO zigzag point (The initial BOS before being updated with shadows) and the candle which closed above it. After detecting
             # this extremum, we add it to HO Zigzag.
             elif breaking_sentiment == "PBOS_CLOSE":
-                self.log_message("Candle at index",
-                                 breaking_pdi, "broke the last PBOS #", latest_pbos_pdi, "with its close price", v=2)
-                self.log_message("BOS #", self.h_o_indices[-1], "break at", breaking_pdi, v=1)
+                if constants.logs_format == "time":
+                    self.log_message("Candle at index",
+                                     self.convert_pdis_to_times(breaking_pdi), "broke the last PBOS #", self.convert_pdis_to_times(latest_pbos_pdi),
+                                     "with its close price", v=2)
+                    self.log_message("BOS #", self.convert_pdis_to_times(self.h_o_indices[-1]), "break at", self.convert_pdis_to_times(breaking_pdi),
+                                     v=1)
+                else:
+                    self.log_message("Candle at index",
+                                     breaking_pdi, "broke the last PBOS #", latest_pbos_pdi, "with its close price", v=2)
+                    self.log_message("BOS #", self.h_o_indices[-1], "break at", breaking_pdi, v=1)
 
                 # The extremum point is the point found using a "lowest low" of a "highest high" search between the last HO pivot and
                 # the closing candle
@@ -449,7 +488,11 @@ class Algo:
                 # Add the extremum point to the HO indices
                 self.h_o_indices.append(int(extremum_pivot.pdi))
                 extremum_type = "lowest low" if trend_type == "ascending" else "highest high"
-                self.log_message("Added extremum of type", extremum_type, "at", extremum_pivot.pdi, v=1)
+
+                if constants.logs_format == "time":
+                    self.log_message("Added extremum of type", extremum_type, "at", self.convert_pdis_to_times(extremum_pivot.pdi), v=1)
+                else:
+                    self.log_message("Added extremum of type", extremum_type, "at", extremum_pivot.pdi, v=1)
 
                 # Now, we can restart finding HO pivots. Starting point is set to the last LPL of the same type BEFORE the BOS breaking candle.
                 # Trend stays the same since no CHOCH has occurred.
@@ -458,7 +501,10 @@ class Algo:
                                                                       & (self.zigzag_df.pdi <= breaking_pdi)]
 
                 pattern_start_pdi = pivots_of_type_before_closing_candle.iloc[-1].pdi
-                self.log_message("Setting pattern start to", pattern_start_pdi, v=1)
+                if constants.logs_format == "time":
+                    self.log_message("Setting pattern start to", self.convert_pdis_to_times(pattern_start_pdi), v=1)
+                else:
+                    self.log_message("Setting pattern start to", pattern_start_pdi, v=1)
 
                 # Essentially reset the algorithm
                 latest_pbos_pdi = None
@@ -487,9 +533,16 @@ class Algo:
             # If a CHOCH has happened, this means the pattern has inverted and should be restarted with the last LPL before the candle which closed
             # below the CHOCH.
             elif breaking_sentiment == "CHOCH_CLOSE":
-                self.log_message("Candle at index",
-                                 breaking_pdi, "broke the last CHOCH #", latest_choch_pdi, "with its close price", v=2)
-                self.log_message("CHOCH #", self.h_o_indices[-2], "break at", breaking_pdi, v=1)
+                if constants.logs_format == "time":
+                    self.log_message("Candle at index",
+                                     self.convert_pdis_to_times(breaking_pdi), "broke the last CHOCH #", self.convert_pdis_to_times(latest_choch_pdi),
+                                     "with its close price", v=2)
+                    self.log_message("CHOCH #", self.convert_pdis_to_times(self.h_o_indices[-2]), "break at",
+                                     self.convert_pdis_to_times(breaking_pdi), v=1)
+                else:
+                    self.log_message("Candle at index",
+                                     breaking_pdi, "broke the last CHOCH #", latest_choch_pdi, "with its close price", v=2)
+                    self.log_message("CHOCH #", self.h_o_indices[-2], "break at", breaking_pdi, v=1)
 
                 trend_type = "ascending" if trend_type == "descending" else "descending"
 
@@ -499,7 +552,10 @@ class Algo:
                                                                       & (self.zigzag_df.pdi <= breaking_pdi)]
 
                 pattern_start_pdi = pivots_of_type_before_closing_candle.iloc[-1].pdi
-                self.log_message("Setting pattern start to", pattern_start_pdi, v=1)
+                if constants.logs_format == "time":
+                    self.log_message("Setting pattern start to", self.convert_pdis_to_times(pattern_start_pdi), v=1)
+                else:
+                    self.log_message("Setting pattern start to", pattern_start_pdi, v=1)
 
                 # Essentially reset the algorithm
                 latest_choch_pdi = self.h_o_indices[-1]
@@ -509,7 +565,10 @@ class Algo:
 
             # If no candles have broken the PBOS even with a shadow, break the loop
             else:
-                self.log_message("No more candles found. Breaking...", v=1)
+                if constants.logs_format == "time":
+                    self.log_message("No more candles found. Breaking...", v=1)
+                else:
+                    self.log_message("No more candles found. Breaking...", v=1)
                 break
 
         # return self.h_o_indices
@@ -636,7 +695,7 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
 
 
 class OrderBlock:
-    def __init__(self, base_candle: Union[pd.Series, Candle], stoploss: float, ob_type: str):
+    def __init__(self, base_candle: Union[pd.Series, Candle], icl: float, ob_type: str):
         if isinstance(base_candle, Candle):
             self.start_index = base_candle.pdi
         elif isinstance(base_candle, pd.Series):
@@ -654,9 +713,13 @@ class OrderBlock:
         self.top = base_candle.high
         self.bottom = base_candle.low
         self.height = self.top - self.bottom
+        # ICL represents the liquidity level of the initial candle, Initial Candle Liquidity. This is the (for long positions) low value of the first
+        # candle that was tested for finding the order block. This is a very important variable which is directly used for forming the positions'
+        # stoploss and targets.
+        self.icl = icl
 
         # The position formed by the OrderBLock
-        self.position = Position(stoploss, self)
+        self.position = Position(self)
 
         # Checks and flags
         self.is_valid = True
@@ -912,12 +975,12 @@ class Segment:
 
             # The stoploss is set at the pivot value of the INITIAL box that was found, since that's the box which has the liquidity. This value is
             # passed to the OB instantiation line as the stoploss value, which in turn goes to the Position attribute within it.
-            initial_pivot_candle_stoploss = pivot.pivot_value
+            initial_pivot_candle_liquidity = pivot.pivot_value
 
             for base_candle_pdi in range(pivot.pdi, replacement_ob_threshold_pdi):
                 base_candle = algo.pair_df.iloc[base_candle_pdi]
                 ob = OrderBlock(base_candle=base_candle,
-                                stoploss=initial_pivot_candle_stoploss,
+                                icl=initial_pivot_candle_liquidity,
                                 ob_type="long" if base_pivot_type == "valley" else "short")
 
                 # the check_box_entries method finds any entry point to each box. These entry points can later be used and we can check if the entries
@@ -949,12 +1012,14 @@ class Segment:
 
 
 class Position:
-    def __init__(self, stoploss: float, parent_ob: OrderBlock):
-        # Entries, targets and stoploss
+    def __init__(self, parent_ob: OrderBlock):
         self.parent_ob = parent_ob
         self.entry_price = parent_ob.top if parent_ob.type == "long" else parent_ob.bottom
-        self.stoploss = stoploss
-        self.position_height = abs(self.entry_price - self.stoploss)
+
+        # Calculation of stoploss is done using the distance from the entry of the box to the initial candle that was checked for OB, before being
+        # potentially replaced. This distance is denoted as EDICL, entry distance from initial candle liquidity.
+        self.edicl = abs(parent_ob.icl - self.entry_price)
+
         self.type = parent_ob.type
 
         self.status: str = "ACTIVE"
@@ -966,18 +1031,7 @@ class Position:
         self.portioned_qty = []
         self.net_profit = None
 
-        if self.type == "long":
-            self.target_list = [
-                self.entry_price + 3 * self.position_height,
-                self.entry_price + 5 * self.position_height,
-                self.entry_price + 7 * self.position_height,
-            ]
-        else:
-            self.target_list = [
-                self.entry_price - 3 * self.position_height,
-                self.entry_price - 5 * self.position_height,
-                self.entry_price - 7 * self.position_height,
-            ]
+        setup.all_on_7(self)
 
     def find_entry_within_segment(self, segment: Segment) -> Union[int, None]:
         """
