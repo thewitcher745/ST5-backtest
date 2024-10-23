@@ -845,10 +845,11 @@ class OrderBlock:
             self.has_fvg_condition = False
 
         else:
-            exit_candle: pd.Series = self.condition_check_window.loc[self.price_exit_index]
+            fvg_exit_candle: pd.Series = self.condition_check_window.loc[self.price_exit_index]
 
             # The overlap between the gap between the before and after candles and the exit candle's body constitutes the FVG.
-            exit_candle_body_interval: list = [min(exit_candle.open, exit_candle.close), max(exit_candle.open, exit_candle.close)]
+            exit_candle_body_interval: list = [min(fvg_exit_candle.open, fvg_exit_candle.close),
+                                               max(fvg_exit_candle.open, fvg_exit_candle.close)]
             gap = find_gap(aggregated_candle_before_exit, aggregated_candle_after_exit)
 
             fvg: list = find_overlap(exit_candle_body_interval, gap)
@@ -1031,7 +1032,7 @@ class Position:
         self.portioned_qty = []
         self.net_profit = None
 
-        setup.all_on_7(self)
+        setup.all_on_60(self)
 
     def find_entry_within_segment(self, segment: Segment) -> Union[int, None]:
         """
