@@ -204,7 +204,7 @@ class PlottingTool:
                            opacity=0.5,
                            name="FVG")
 
-    def draw_segment_bbox(self, segment):
+    def draw_segment_bbox(self, segment, color="yellow"):
         """
         This method draws a hollow blue bounding box for a segment that will be processed in the backtest.
         Args:
@@ -217,7 +217,7 @@ class PlottingTool:
                            y1=segment.top_price,
                            line=dict(
                                width=2,  # Border width
-                               color='yellow'  # Border color
+                               color=color  # Border color
                            ),
                            name="Segment")
 

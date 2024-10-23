@@ -509,7 +509,7 @@ class Algo:
                 # Essentially reset the algorithm
                 latest_pbos_pdi = None
 
-                # The segment is added to the list of segments here. Each segment starts at the pivot before the high that was just broken by a candle
+                # A segment is added to the list of segments here. Each segment starts at the pivot before the high that was just broken by a candle
                 # closing above it. The segment ends at the PBOS_CLOSE event, at the candle that closed above the high. The -3 index is used because
                 # there are two points after it: The high that was just broken, and the extremum that was added because the high was broken; therefore
                 # we need the THIRD to last pivot.
@@ -556,6 +556,21 @@ class Algo:
                     self.log_message("Setting pattern start to", self.convert_pdis_to_times(pattern_start_pdi), v=1)
                 else:
                     self.log_message("Setting pattern start to", pattern_start_pdi, v=1)
+
+                # A segment is added to the list of segments here. Each segment starts at the pivot before the low that was just broken by a candle
+                # closing below it. The segment ends at the CHOCH_CLOSE event, at the candle that closed above the high.
+                # we need the THIRD to last pivot. trend_type needs to be reverted because we are still working on the same positions from before
+                # the CHOCH happened and in the same direction, just that the event is different...
+                segment_to_add: Segment = Segment(start_pdi=self.h_o_indices[-2],
+                                                  end_pdi=breaking_pdi,
+                                                  ob_leg_start_pdi=self.h_o_indices[-2],
+                                                  ob_leg_end_pdi=self.h_o_indices[-2],
+                                                  top_price=latest_pbos_threshold,
+                                                  bottom_price=latest_choch_threshold,
+                                                  ob_formation_start_pdi=lpl_breaking_pdi + 1,
+                                                  broken_lpl_pdi=broken_lpl.pdi,
+                                                  type="ascending" if trend_type == "descending" else "descending", formation_method="choch")
+                self.segments.append(segment_to_add)
 
                 # Essentially reset the algorithm
                 latest_choch_pdi = self.h_o_indices[-1]
@@ -908,7 +923,8 @@ class Segment:
                  bottom_price: float,
                  ob_formation_start_pdi: int,
                  broken_lpl_pdi: int,
-                 type: str):
+                 type: str,
+                 formation_method: str = "bos"):
         self.end_pdi = end_pdi
         self.start_pdi = start_pdi
         self.ob_leg_start_pdi = ob_leg_start_pdi
@@ -918,6 +934,7 @@ class Segment:
         self.ob_formation_start_pdi = ob_formation_start_pdi
         self.broken_lpl_pdi = broken_lpl_pdi
         self.type = type
+        self.formation_method = formation_method
 
         self.ob_list: list[OrderBlock] = []
         self.pair_df: pd.DataFrame = pd.DataFrame()
@@ -1032,7 +1049,7 @@ class Position:
         self.portioned_qty = []
         self.net_profit = None
 
-        setup.all_on_60(self)
+        setup.default_357(self)
 
     def find_entry_within_segment(self, segment: Segment) -> Union[int, None]:
         """
