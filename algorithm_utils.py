@@ -936,6 +936,9 @@ class Segment:
         self.type = type
         self.formation_method = formation_method
 
+        if constants.logs_format != "time":
+            self.id = f"SEG/{self.formation_method}/{self.start_pdi}"
+
         self.ob_list: list[OrderBlock] = []
         self.pair_df: pd.DataFrame = pd.DataFrame()
 
@@ -949,6 +952,9 @@ class Segment:
         a segment's bounds are defined as such.
         """
         self.pair_df = algo.pair_df.iloc[self.ob_formation_start_pdi:self.end_pdi + 1]
+
+        if constants.logs_format == "time":
+            self.id = f"SEG/{self.formation_method}/{algo.pair_df.loc[self.start_pdi].time}"
 
     def find_order_blocks(self, algo: Algo):
         """
