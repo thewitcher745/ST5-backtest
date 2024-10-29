@@ -1,9 +1,11 @@
 import logging
 from datetime import datetime
+from dotenv import dotenv_values
 
 import logging
 from datetime import datetime
 
+pair_name = dotenv_values(".env.params")["pair_name"]
 
 class LoggerSingleton:
     _instance = None
@@ -19,11 +21,11 @@ class LoggerSingleton:
         self.logger.setLevel(logging.DEBUG)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"./logs/{name}_{timestamp}.log"
+        log_filename = f"./logs/{name}_{timestamp}-{pair_name}.log"
         file_handler = logging.FileHandler(log_filename)
         file_handler.setLevel(logging.DEBUG)
 
-        formatter = logging.Formatter('%(name)s - %(message)s')
+        formatter = logging.Formatter('%(message)s')
         file_handler.setFormatter(formatter)
 
         self.logger.addHandler(file_handler)
