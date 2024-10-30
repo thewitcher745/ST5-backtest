@@ -1325,13 +1325,13 @@ class Position:
             target. If a candle registers a stoploss, the int is 0.
         """
 
-        def last_element_bigger_than(targets, price):
+        def last_element_bigger_than(targets: list[float], price: float):
             for i in reversed(range(len(targets))):
                 if targets[i] >= price:
                     return i + 1
             return 0
 
-        def last_element_smaller_than(targets, price):
+        def last_element_smaller_than(targets: list[float], price: float):
             for i in reversed(range(len(targets))):
                 if targets[i] <= price:
                     return i + 1

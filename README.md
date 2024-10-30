@@ -157,4 +157,4 @@
   segment. This means the search for the exit candle will only continue up to the last candle of the segment and no further. This can probably be
   optimized, but it does make sense since the order block can only enter before the segment ends, and the exit candle should be found by then. If an
   exit candle is not found in this region, the price_exit_index property of the order block will remain as None, failing most of the checks for that
-  OB.
+  OB. 
