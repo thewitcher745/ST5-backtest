@@ -128,9 +128,33 @@
   due to the FVG condition not being satisfied) to the output report. This made it easier to track if the replacement process is actually worth it or
   not.
 
-#### ver b0.10.0
+#### ver b0.10
 
 - Now the algorithm will also try to form segments when a CHOCH_CLOSE event happens. Previously, the algorithm actually had look-ahead bias as it only
-  formed positions on PBOS_CLOSE events, before the actual outcome was known. Now, the algorithm will form segments on CHOCH_CLOSE events as well. 
-- The segments now have a formation_method property which tells us how the segment was formed. This is useful for debugging and validation purposes, 
+  formed positions on PBOS_CLOSE events, before the actual outcome was known. Now, the algorithm will form segments on CHOCH_CLOSE events as well.
+- The segments now have a formation_method property which tells us how the segment was formed. This is useful for debugging and validation purposes,
   and also used in the plotting of the segments.
+
+#### ver b0.11: The FIND_ORDER_BLOCKS update!
+
+- algorithm_utils now uses a robust logging module (based on the logging library) to log position formation-related information. The logged output
+  includes tabbed (horizontal) and vertical spacing for super easy readability. The HO zigzag logs will later be migrated to use this module as well.
+- Finding the location where the LPL breaks now uses a better method of finding the breaking candle. Previously, the search was only performed on LO
+  zigzag pivots, and the PDI of whichever one broke it first was returned as the breaking candle PDI. Now the algorithm actually looks for the candle
+  that broke the LPL, in a small region ranging from the breaking pivot's previous pivot (Normally a higher order pivot) to the breaking pivot itself.
+  This region will be searched for a candle that breaks the breaking_value (According to the Algo.detect_first_broken_lpl() method) instead of a pivot
+  that does.
+- Checking the reentry condition has been overhauled. Now it has a separate checking method (OrderBlock.has_entry_condition) and a separate check
+  flag (OrderBlock.has_reentry_condition, True by default). The method uses simple pandas dataframe slices to look for reentries in a
+  reentry_check_window (passed as an argument). If a candle has pierced the top (long OB) or bottom (short OB) of an order block in this reentry check
+  window, the check will fail and the flag will be set to False. the reentry_check_window will be passed to the function through the
+  Segment.find_order_blocks method (Explained further in the changelog)
+- The Segment.find_order_blocks, which was a method which, within each segment, attempted to find valid order blocks, now uses the new reentry check
+  method. Also, now if an OB doesn't have a valid exit candle, the search will continue and the next candle will be checked.
+- OrderBlock.check_box_entries which registered the reentries (naively and unnecessarily, will later be revised and formatted for cleaner code) and
+  more importantly the order block's exit candle, has been reformatted to only look for the exit candle up to a certain upper bound, passed as an
+  argument (upper_search_bound_pdi). Currently, the upper bound is passed in the Segment.find_order_blocks() method, and is set to the end of the
+  segment. This means the search for the exit candle will only continue up to the last candle of the segment and no further. This can probably be
+  optimized, but it does make sense since the order block can only enter before the segment ends, and the exit candle should be found by then. If an
+  exit candle is not found in this region, the price_exit_index property of the order block will remain as None, failing most of the checks for that
+  OB.

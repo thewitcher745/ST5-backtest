@@ -5,10 +5,17 @@ import constants
 from datatypes import *
 from general_utils import log_message as log_message_general
 import position_prices_setup as setup
+from logger import LoggerSingleton
+
+positions_logger_instance = LoggerSingleton("positions")
+positions_logger = positions_logger_instance.get_logger()
 
 
 class Algo:
-    def __init__(self, pair_df: pd.DataFrame, symbol: str, timeframe: str = "15m", allowed_verbosity=constants.allowed_verbosity):
+    def __init__(self, pair_df: pd.DataFrame,
+                 symbol: str,
+                 timeframe: str = "15m",
+                 allowed_verbosity=constants.allowed_verbosity):
         self.allowed_verbosity = allowed_verbosity
         self.pair_df: pd.DataFrame = pair_df
         self.symbol: str = symbol
@@ -190,9 +197,36 @@ class Algo:
 
             # Breaking
             if breaking_condition:
-                # Return the LPL which was broken, as well as the breaking candle's PDI. The PDI is later used in segments to indicate which candle
-                # the order blocks can be entered after.
-                return self.zigzag_df[self.zigzag_df.pdi == breaking_pdi].iloc[0], row.pdi
+                # If a breaking event has occurred, we need to find the actual CANDLE that broke the LPL, since it might have happened before the PIVOT
+                # that broke the LPL, since zigzag pivots are a much more aggregated type of data compared to the candles and almost always the actual
+                # candle that breaks the LPL is one of the candles before the pivot that was just found.
+
+                # The candle search range starts at the pivot before the LPL-breaking pivot (which is typically a higher order pivot) PDI and the
+                # breaking pivot PDI.
+                pivot_before_breaking_pivot: int = self.find_relative_pivot(row.pdi, -1)
+                breaking_candle_search_window: pd.DataFrame = self.pair_df.loc[pivot_before_breaking_pivot + 1:row.pdi + 1]
+
+                # If the trend is ascending, it means the search window should be checked for the first candle that breaks the LPL by having a lower
+                # low than the breaking_value.
+                if trend_type == "ascending":
+                    lpl_breaking_candles = breaking_candle_search_window[breaking_candle_search_window.low < breaking_value]
+
+                # If the trend is descending, the breaking candle must have a higher high than the breaking value.
+                elif trend_type == "descending":
+                    lpl_breaking_candles = breaking_candle_search_window[breaking_candle_search_window.high > breaking_value]
+
+                breaking_candle_pdi = lpl_breaking_candles.first_valid_index()
+
+                # If the search window for the breaking candle is empty, return the pivot as the breaking candle
+                if breaking_candle_pdi is None:
+                    breaking_candle_pdi = row.pdi
+
+                if constants.logs_format == "time":
+                    self.log_message("LPL #", breaking_pdi, "broken at", self.convert_pdis_to_times(breaking_candle_pdi), v=1)
+                else:
+                    self.log_message("LPL #", breaking_pdi, "broken at", breaking_candle_pdi, v=1)
+
+                return self.zigzag_df[self.zigzag_df.pdi == breaking_pdi].iloc[0], breaking_candle_pdi
 
             # Extension
             if extension_condition:
@@ -741,6 +775,7 @@ class OrderBlock:
         self.price_exit_index = None
         self.price_reentry_indices = []
         self.condition_check_window = None
+        self.has_reentry_condition = True
         self.has_fvg_condition = None
         self.has_stop_break_condition = None
         self.has_been_replaced = False
@@ -755,7 +790,7 @@ class OrderBlock:
     def __repr__(self):
         return f"OB {self.id} ({self.type})"
 
-    def check_box_entries(self, pair_df: pd.DataFrame) -> None:
+    def check_box_entries(self, pair_df: pd.DataFrame, upper_search_bound_pdi: int) -> None:
         """
         Method to check the entries of the box and determine its validity.
 
@@ -764,10 +799,11 @@ class OrderBlock:
 
         Args:
             pair_df (pd.DataFrame): The DataFrame containing the price data.
+            upper_search_bound_pdi (int): The PDI of the candle to stop the search at.
         """
 
         # Get the subset of pair_df that we need to check
-        check_window = pair_df.iloc[self.start_index + 1:]
+        check_window = pair_df.iloc[self.start_index + 1:upper_search_bound_pdi + 1]
 
         # If the box is of type "long"
         if self.type == "long":
@@ -818,6 +854,31 @@ class OrderBlock:
         else:
             self.condition_check_window = pair_df.iloc[self.start_index:]
 
+    def check_reentry_condition(self, reentry_check_window: pd.DataFrame):
+        """
+        Method to check if the price returns to the  box pre-emptively, before it is fully formed from the LPL breaking it. This check is performed
+        by checking all the candles from right after the base_candle to the candle that breaks the LPL (Which is passed to this function through
+        the respective segment), and in the check window, for a long order block, we check if the LOWEST LOW of all the candles in the window pierced
+        the order block's top. For a short position, we check the HIGHEST HIGH and the bottom of the box. The has_reentry_condition property of the OB
+        object is the flag property that keeps track of the passing of this condition.
+
+        Args:
+            reentry_check_window (pd.DataFrame): A dataframe containing the candles of the window formed starting after the base_candle and before
+            the breaking of the LPL. This window will be checked for reentry in this function.
+
+        """
+
+        if self.type == "long":
+            # Check if the lowest low in the reentry check window pierces the top of the box
+            lowest_low = reentry_check_window.low.min()
+            if lowest_low <= self.top:
+                self.has_reentry_condition = False
+        else:
+            # Check if the highest high in the reentry check window pierces the bottom of the box
+            highest_high = reentry_check_window.high.max()
+            if highest_high >= self.bottom:
+                self.has_reentry_condition = False
+
     def check_fvg_condition(self):
         """
         Method to check the FVG condition for the box. The method checks if the exiting candle has an FVG on it which aligns exactly with the box's
@@ -832,7 +893,7 @@ class OrderBlock:
         # its high and low.
 
         if self.price_exit_index is None:
-            return False
+            self.has_fvg_condition = False
 
         aggregated_candle_after_exit: list = [self.condition_check_window.loc[self.price_exit_index + 1:].low.min(),
                                               self.condition_check_window.loc[self.price_exit_index + 1:].high.max()]
@@ -965,6 +1026,7 @@ class Segment:
         Args:
             algo: The Algo object
         """
+        positions_logger.debug(f"Finding order blocks for segment {self.id}")
 
         # For testing and safety purposes, the ob_list property is reset.
         self.ob_list = []
@@ -980,9 +1042,15 @@ class Segment:
         # Filter pivots of the correct type (valley for ascending, peak for descending) and pivots that are within the first leg. Also omit the pivots
         # that have a higher PDI than the broken LPL PDI, meaning the boxes that form above the broken LPL in ascending and below the LPL in
         # descending
+
         for pivot in algo.zigzag_df[(algo.zigzag_df.pivot_type == base_pivot_type) &
                                     (self.ob_leg_start_pdi <= algo.zigzag_df.pdi) &
                                     (algo.zigzag_df.pdi < self.broken_lpl_pdi)].itertuples():
+
+            if constants.logs_format == "time":
+                positions_logger.debug(f"\tFinding OBs for lower order leg starting at {algo.convert_pdis_to_times(pivot.pdi)}")
+            else:
+                positions_logger.debug(f"\tFinding OBs for lower order leg starting at {pivot.pdi}")
 
             # This try-except block is used to determine the window that is used for finding replacement order blocks in the chart. Currently, the
             # window spans from the very first base candle (the pivot found using the outer loop) to the lower-order pivot immediately after it.
@@ -993,6 +1061,11 @@ class Segment:
                 replacement_ob_threshold_pdi = next_pivot_pdi
             except IndexError:
                 replacement_ob_threshold_pdi = algo.pair_df.last_valid_index()
+
+            if constants.logs_format == "time":
+                positions_logger.debug(f"\tReplacement OB search threshold set up to {algo.convert_pdis_to_times(replacement_ob_threshold_pdi)}")
+            else:
+                positions_logger.debug(f"\tReplacement OB search threshold set up to {replacement_ob_threshold_pdi}")
 
             # times_moved indicates the times the algorithm had to move the base candle to find a replacement order block.
             times_moved = 0
@@ -1007,18 +1080,54 @@ class Segment:
                                 icl=initial_pivot_candle_liquidity,
                                 ob_type="long" if base_pivot_type == "valley" else "short")
 
+                if constants.logs_format == "time":
+                    positions_logger.debug(f"\t\tInvestigating base candle at {algo.convert_pdis_to_times(base_candle_pdi)}")
+                else:
+                    positions_logger.debug(f"\t\tInvestigating base candle at {base_candle_pdi}")
+
                 # the check_box_entries method finds any entry point to each box. These entry points can later be used and we can check if the entries
                 # are within the respective segments. This method also sets the condition check window at the end, which is used to check if the boxes
-                # satisfy the confirmation conditions.
-                ob.check_box_entries(algo.pair_df)
-                ob.check_fvg_condition()
-                ob.check_stop_break_condition()
+                # satisfy the confirmation conditions. The search upper bound is the last candle of the segment.
+                ob.check_box_entries(algo.pair_df, self.end_pdi)
+
+                # The reentry window dataframe is used to check whether the price returned to the box in the span between the exit candle and the LPL
+                # breaking candle. This is checked using the check_reentry_condition() method of the OrderBlock object. The reentry dataframe is
+                # passed as an argument to the method.
+                if ob.price_exit_index is not None:
+                    reentry_check_window: pd.DataFrame = algo.pair_df.iloc[ob.price_exit_index + 1:self.ob_formation_start_pdi]
+
+                    # Log the exit candle location
+                    if constants.logs_format == "time":
+                        positions_logger.debug(
+                            f"\t\t\tExit candle found at {algo.convert_pdis_to_times(ob.price_exit_index)}")
+                    else:
+                        positions_logger.debug(f"\t\t\tExit candle found at {ob.price_exit_index}")
+
+                    if constants.logs_format == "time":
+                        positions_logger.debug(
+                            f"\t\t\tReentry check window set up from {algo.convert_pdis_to_times(ob.price_exit_index + 1)} to {algo.convert_pdis_to_times(self.ob_formation_start_pdi) - 1}")
+                    else:
+                        positions_logger.debug(
+                            f"\t\t\tReentry check window set up from {ob.price_exit_index + 1} to {self.ob_formation_start_pdi - 1}")
+
+                # This else statement is implemented to account for boxes which don't have an exit candle which opens inside and closes outside of
+                # them, automatically making them invalid and prompting considering another replacement.
+                else:
+                    positions_logger.debug("\t\t\tNo exit candle found. OB is invalid, looking for a replacement further in time.")
+                    continue
 
                 # This check ensures that the order block being processed is totally valid to be used AFTER the formation of the pattern, that means
                 # that the order block has either A) had no reentry at all or B) has had its reentry after the formation of the pattern.
-                ob_is_valid_in_formation_region = len(ob.price_reentry_indices) == 0 or ob.price_reentry_indices[0] > self.ob_formation_start_pdi
+                # ob_is_valid_in_formation_region = len(ob.price_reentry_indices) == 0 or ob.price_reentry_indices[0] > self.ob_formation_start_pdi
+                ob.check_reentry_condition(reentry_check_window)
+                ob.check_fvg_condition()
+                ob.check_stop_break_condition()
 
-                if ob.has_fvg_condition and ob.has_stop_break_condition and ob_is_valid_in_formation_region:
+                positions_logger.debug(f"\t\t\tReentry check status: {ob.has_reentry_condition}")
+                positions_logger.debug(f"\t\t\tFVG check status: {ob.has_fvg_condition}")
+                positions_logger.debug(f"\t\t\tStop break check status: {ob.has_stop_break_condition}")
+                if ob.has_reentry_condition and ob.has_fvg_condition and ob.has_stop_break_condition:
+                    positions_logger.debug(f"\t\t\tAll checks passed, adding OB with ID {ob.id}")
                     valid_ob_counter += 1
 
                     ob.ranking_within_segment = valid_ob_counter
@@ -1029,14 +1138,18 @@ class Segment:
                     break
 
                 else:
+                    positions_logger.debug("\t\t\tOne or more checks didn't pass, moving to next candle...")
                     ob.has_been_replaced = True
-                    # self.ob_list.append(ob)
 
                 times_moved += 1
+
+        positions_logger.debug(f"End of finding order blocks for segment {self.id}")
+        positions_logger.debug("")
 
 
 class Position:
     def __init__(self, parent_ob: OrderBlock):
+
         self.parent_ob = parent_ob
         self.entry_price = parent_ob.top if parent_ob.type == "long" else parent_ob.bottom
 
@@ -1055,6 +1168,9 @@ class Position:
         self.portioned_qty = []
         self.net_profit = None
 
+        self.target_list = []
+        self.stoploss = None
+        # Set up the targt list nd stoploss using a function which operates on the "self" object and directly manipulates the instance.
         setup.default_357(self)
 
     def find_entry_within_segment(self, segment: Segment) -> Union[int, None]:
