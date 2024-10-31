@@ -1,12 +1,7 @@
 import logging
 from datetime import datetime
-from dotenv import dotenv_values
+from utils.config import Config
 
-import logging
-from datetime import datetime
-
-pair_name = dotenv_values(".env.params")["pair_name"]
-print("Initializing logger with pair name: ", pair_name)
 
 class LoggerSingleton:
     _instance = None
@@ -18,11 +13,12 @@ class LoggerSingleton:
         return cls._instance
 
     def _initialize(self, name: str):
+        pair_name = Config.get_pair_name()
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"./logs/{name}_{timestamp}-{pair_name}.log"
+        log_filename = f"../logs/{name}_{timestamp}-{pair_name}.log"
         file_handler = logging.FileHandler(log_filename)
         file_handler.setLevel(logging.DEBUG)
 
@@ -31,9 +27,10 @@ class LoggerSingleton:
 
         self.logger.addHandler(file_handler)
 
+        print("Logger initiated with pair name", pair_name)
+
     def get_logger(self):
         return self.logger
-
 
 # def get_higher_order_zigzag_logger(pair_name: str) -> logging.Logger:
 #     return create_logger("ho_zigzag", pair_name)

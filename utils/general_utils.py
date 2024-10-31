@@ -5,7 +5,7 @@ import constants
 
 
 def load_local_data(pair_name: str = "BTCUSDT", timeframe: str = "15m") -> pd.DataFrame:
-    hdf_path: str = f"./cached_data/{pair_name}-{timeframe}.hdf5"
+    hdf_path: str = f"../cached_data/{pair_name}-{timeframe}.hdf5"
 
     pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
     pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
@@ -14,7 +14,7 @@ def load_local_data(pair_name: str = "BTCUSDT", timeframe: str = "15m") -> pd.Da
 
 
 def load_higher_tf_data(pair_name: str = "BTCUSDT", timeframe: str = "4h") -> pd.DataFrame:
-    hdf_path: str = f"./cached_data/{pair_name}-{timeframe}.hdf5"
+    hdf_path: str = f"../cached_data/{pair_name}-{timeframe}.hdf5"
 
     pair_df = pd.DataFrame(pd.read_hdf(hdf_path))
     pair_df['candle_color'] = pair_df.apply(lambda row: 'green' if row.close > row.open else 'red', axis=1)
@@ -29,7 +29,7 @@ def reset_logs():
 def log_message(*messages, v: int = 3, av=constants.allowed_verbosity) -> None:
     if v <= av:
         print(messages)
-        with open("logs.txt", "a") as fs:
+        with open("./logs/logs.txt", "a") as fs:
             for message in messages:
                 fs.write(str(message))
                 fs.write(" ")
@@ -233,6 +233,7 @@ class PlottingTool:
                                xaxis_rangeslider_visible=False)
 
         self.fig.show()
+
 
 def convert_timestamp_to_readable(timestamp: pd.Timestamp):
     utc = timestamp.to_pydatetime()

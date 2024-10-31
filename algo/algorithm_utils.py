@@ -3,12 +3,11 @@ import pandas as pd
 
 import constants
 from datatypes import *
-from general_utils import log_message as log_message_general
-import position_prices_setup as setup
-from logger import LoggerSingleton
+from utils.general_utils import log_message as log_message_general
+from algo import position_prices_setup as setup
+from utils.logger import LoggerSingleton
 
-positions_logger_instance = LoggerSingleton("positions")
-positions_logger = positions_logger_instance.get_logger()
+positions_logger = None
 
 
 class Algo:
@@ -16,6 +15,11 @@ class Algo:
                  symbol: str,
                  timeframe: str = "15m",
                  allowed_verbosity=constants.allowed_verbosity):
+        global positions_logger
+
+        if positions_logger is None:
+            positions_logger = LoggerSingleton("positions").get_logger()
+
         self.allowed_verbosity = allowed_verbosity
         self.pair_df: pd.DataFrame = pair_df
         self.symbol: str = symbol

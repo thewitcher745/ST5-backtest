@@ -18,4 +18,4 @@ timeframe_minutes = {
 
 used_capital = 1000
 
-logs_format = "index"
+logs_format = "time"

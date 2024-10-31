@@ -2,7 +2,7 @@ from typing import NamedTuple, List, Tuple, Type, Union
 import pandas as pd
 from datetime import datetime
 
-import general_utils as gen_utils
+import utils.general_utils as gen_utils
 
 
 class Candle(NamedTuple):
