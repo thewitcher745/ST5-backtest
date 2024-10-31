@@ -5,20 +5,11 @@ from openpyxl import load_workbook
 
 import utils.general_utils as gu
 from utils.config import Config
-from algorithm_utils import Algo, create_filtered_pair_df_with_corrected_starting_point
+from algo.algorithm_utils import Algo, create_filtered_pair_df_with_corrected_starting_point
 from utils.logger import LoggerSingleton
 
 
 def run_algo(pair_name: str, timeframe: str):
-    # Set up the .env file for use in logging
-    try:
-        os.remove(".env.params")
-    except FileNotFoundError:
-        pass
-
-    set_key(".env.params", "timeframe", timeframe)
-    set_key(".env.params", "pair_name", pair_name)
-
     higher_timeframe = gu.find_higher_timeframe(timeframe)
 
     # --------------------------------------------------------
@@ -152,6 +143,7 @@ def run_algo(pair_name: str, timeframe: str):
                     target_hit_times_list = algo.convert_pdis_to_times(position.target_hit_pdis)
 
                 position_data = {
+                    'Pair name': pair_name,
                     'Position ID': position.parent_ob.id,
                     'Segment ID': segment.id,
                     'Status': position.status,
@@ -200,11 +192,11 @@ def run_algo(pair_name: str, timeframe: str):
         # Save the workbook
         wb.save(output_file)
 
-    generate_positions_excel(f'../reports/positions-{pair_name}.xlsx')
+    generate_positions_excel(f'./reports/positions-{pair_name}.xlsx')
 
     # --------------------------------------------------------
     # Generate a summary of the data in the Excel file
-    positions_data_df = pd.read_excel(f'../reports/positions-{pair_name}.xlsx')
+    positions_data_df = pd.read_excel(f'./reports/positions-{pair_name}.xlsx')
 
     total_positions_found = len(positions_data_df)
     entered_positions = len(positions_data_df[positions_data_df["Status"] != "ACTIVE"])

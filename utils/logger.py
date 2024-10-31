@@ -18,7 +18,7 @@ class LoggerSingleton:
         self.logger.setLevel(logging.DEBUG)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"../logs/{name}_{timestamp}-{pair_name}.log"
+        log_filename = f"./logs/{name}_{timestamp}-{pair_name}.log"
         file_handler = logging.FileHandler(log_filename)
         file_handler.setLevel(logging.DEBUG)
 
