@@ -1105,7 +1105,7 @@ class Segment:
 
                     if constants.logs_format == "time":
                         positions_logger.debug(
-                            f"\t\t\tReentry check window set up from {algo.convert_pdis_to_times(ob.price_exit_index + 1)} to {algo.convert_pdis_to_times(self.ob_formation_start_pdi) - 1}")
+                            f"\t\t\tReentry check window set up from {algo.convert_pdis_to_times(ob.price_exit_index + 1)} to {algo.convert_pdis_to_times(self.ob_formation_start_pdi - 1)}")
                     else:
                         positions_logger.debug(
                             f"\t\t\tReentry check window set up from {ob.price_exit_index + 1} to {self.ob_formation_start_pdi - 1}")
