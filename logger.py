@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 
 pair_name = dotenv_values(".env.params")["pair_name"]
+print("Initializing logger with pair name: ", pair_name)
 
 class LoggerSingleton:
     _instance = None
