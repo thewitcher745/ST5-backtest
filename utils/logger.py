@@ -2,7 +2,6 @@ import logging
 from datetime import datetime
 from utils.config import Config
 
-
 class LoggerSingleton:
     _instance = None
 
@@ -13,12 +12,20 @@ class LoggerSingleton:
         return cls._instance
 
     def _initialize(self, name: str):
-        pair_name = Config.get_pair_name()
+        self.name = name
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
 
+    def update_pair_name(self, pair_name: str):
+        # Remove existing file handlers
+        for handler in self.logger.handlers[:]:
+            if isinstance(handler, logging.FileHandler):
+                self.logger.removeHandler(handler)
+                handler.close()
+
+        # Create a new file handler with the updated pair_name
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"./logs/{name}_{timestamp}-{pair_name}.log"
+        log_filename = f"./logs/{self.name}_{timestamp}-{pair_name}.log"
         file_handler = logging.FileHandler(log_filename)
         file_handler.setLevel(logging.DEBUG)
 
@@ -26,15 +33,7 @@ class LoggerSingleton:
         file_handler.setFormatter(formatter)
 
         self.logger.addHandler(file_handler)
-
-        print("Logger initiated with pair name", pair_name)
+        print("Logger updated with new pair name", pair_name)
 
     def get_logger(self):
         return self.logger
-
-# def get_higher_order_zigzag_logger(pair_name: str) -> logging.Logger:
-#     return create_logger("ho_zigzag", pair_name)
-#
-#
-# def get_position_formation_logger(pair_name: str) -> logging.Logger:
-#     return create_logger("positions", pair_name)

@@ -14,12 +14,9 @@ def run_algo(pair_name: str, timeframe: str):
 
     # --------------------------------------------------------
     # Set up the logger module
-    # Set the pair_name in the configuration singleton
-    Config.set_pair_name(pair_name)
 
     # Initialize the logger
-    positions_logger_instance = LoggerSingleton("positions")
-    positions_logger = positions_logger_instance.get_logger()
+    positions_logger = LoggerSingleton("positions").get_logger()
 
     testing_length = 0
     start_index = -8 * testing_length - 1
