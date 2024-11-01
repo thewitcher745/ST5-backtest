@@ -33,7 +33,6 @@ class LoggerSingleton:
         file_handler.setFormatter(formatter)
 
         self.logger.addHandler(file_handler)
-        print("Logger updated with new pair name", pair_name)
 
     def get_logger(self):
         return self.logger

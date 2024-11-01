@@ -1,5 +1,6 @@
 from dotenv import set_key
 import os
+from tqdm import tqdm
 import pandas as pd
 from openpyxl import load_workbook
 
@@ -34,12 +35,7 @@ def run_algo(pair_name: str, timeframe: str):
     # Higher timeframe data for determining starting point
     htf_pair_df: pd.DataFrame = gu.load_higher_tf_data(pair_name=pair_name, timeframe=higher_timeframe)
 
-    print("LTF length is", len(pair_df))
-    print("HTF length is", len(htf_pair_df))
-
     gu.reset_logs()
-
-    print("Original pair_df starting point is at time", pair_df.iloc[0].time)
 
     # --------------------------------------------------------
     # Calculate the starting point and higher order zigzag
@@ -49,19 +45,25 @@ def run_algo(pair_name: str, timeframe: str):
     corrected_pair_df = create_filtered_pair_df_with_corrected_starting_point(htf_pair_df, initial_data_start_time,
                                                                               original_pair_df, timeframe, higher_timeframe)
 
-    print("Updated pair_df starting point to", corrected_pair_df.iloc[0].time)
-
     algo = Algo(corrected_pair_df, "BTCUSDT", allowed_verbosity=0)
 
     algo.init_zigzag(last_pivot_type="valley", last_pivot_candle_pdi=0)
     h_o_starting_point: int = algo.zigzag_df.iloc[0].pdi
 
+    # Creating the higher order zigzag
+    print("Creating HO Zigzag...")
     algo.calc_h_o_zigzag(h_o_starting_point)
 
     # --------------------------------------------------------
     # Use the segments from the algo object to calculate position entries and exits
+
+    print("Processing segments...")
+    # Initialize the progress bar
+    total_candles = len(algo.pair_df)
+    progress_bar = tqdm(total=total_candles, desc="")
+    candles_processed = 0
+
     for segment in algo.segments:
-        print(segment)
         segment.filter_candlestick_range(algo)
         segment.find_order_blocks(algo)
         for ob in segment.ob_list:
@@ -115,11 +117,11 @@ def run_algo(pair_name: str, timeframe: str):
 
                     ob.position.exit(exit_code="STOPLOSS", exit_pdi=exit_index)
 
-            # print(ob)
-            # print("TARGETS", ob.position.target_list)
-            # print("STOPLOSS", ob.position.stoploss)
-            # print("FIRST EXIT INDEX", exit_index)
-            # print(candle_sentiments.iloc[exit_index])
+        # Update the number of candles processed
+        candles_processed = segment.end_pdi + 1
+        progress_bar.update(candles_processed - progress_bar.n)
+
+    progress_bar.close()
 
     # --------------------------------------------------------
     # Generate the Excel file report

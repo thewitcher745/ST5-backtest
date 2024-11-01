@@ -728,7 +728,7 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
 
     # The PDI of the candle in the LTF data which corresponds to the exact time found by find_last_htf_ho_pivot. This will be used to create the
     # aggregated candles and find the lowest low/highest high candle depending on starting_pivot_type and filtering pair_df based on that.
-    print(starting_timestamp)
+
     initial_starting_pdi = original_pair_df[original_pair_df.time == starting_timestamp].iloc[0].name
 
     # This parameter depends on the conversion rate between the LTF and HTF timeframes

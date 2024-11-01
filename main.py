@@ -6,13 +6,15 @@ from utils.logger import LoggerSingleton
 
 # Get the pair list from cached_data folder
 pair_list = [filename.split(".")[0] for filename in os.listdir("./cached_data/15m")]
+pair_count = len(pair_list)
 
-for pair_name in pair_list:
+for pair_counter, pair_name in enumerate(pair_list, start=1):
     # Set the pair_name in the configuration singleton and the logger
     Config.set_pair_name(pair_name)
     LoggerSingleton("positions").update_pair_name(pair_name)
 
-    print(pair_name)
+    print(f"Processing pair {pair_counter}/{pair_count}:", pair_name)
+
     try:
         run_algo(pair_name, "15m")
 
