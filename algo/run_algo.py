@@ -1,23 +1,14 @@
-from dotenv import set_key
-import os
 from tqdm import tqdm
 import pandas as pd
 from openpyxl import load_workbook
 
 import utils.general_utils as gu
-from utils.config import Config
-from algo.algorithm_utils import Algo, create_filtered_pair_df_with_corrected_starting_point
+from algo.Algo import Algo, create_filtered_pair_df_with_corrected_starting_point
 from utils.logger import LoggerSingleton
 
 
 def run_algo(pair_name: str, timeframe: str):
     higher_timeframe = gu.find_higher_timeframe(timeframe)
-
-    # --------------------------------------------------------
-    # Set up the logger module
-
-    # Initialize the logger
-    positions_logger = LoggerSingleton("positions").get_logger()
 
     testing_length = 0
     start_index = -8 * testing_length - 1
@@ -86,9 +77,9 @@ def run_algo(pair_name: str, timeframe: str):
                 exit_code = candle_sentiments.loc[exit_index][0]
                 # If the first exit event to happen is a full target, that means we have the maximum profit, and we exit the position.
                 if exit_code == "FULL_TARGET":
-                    # This snippet is used to register each target individually, before the full target event happens. This is used for validating target
-                    # hits and troubleshoot bugs later using the ob.position.target_hit_pdis property which stores the PDI's of the candles that hit
-                    # the targets.
+                    # This snippet is used to register each target individually, before the full target event happens. This is used for validating
+                    # target hits and troubleshoot bugs later using the ob.position.target_hit_pdis property which stores the PDI's of the candles
+                    # that hit the targets.
                     targets_before_full_target_cum_max: pd.Series = candle_sentiments.loc[:exit_index].apply(
                         lambda row: row[1] if row[0] == "TARGET" else 0).cummax()
                     max_target_changes: pd.Series = targets_before_full_target_cum_max[targets_before_full_target_cum_max.diff() > 0]

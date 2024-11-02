@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from utils.config import Config
 
+
 class LoggerSingleton:
     _instance = None
 

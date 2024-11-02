@@ -1,13 +1,10 @@
-from typing import Optional, Literal
+from typing import Optional
 import pandas as pd
 
 import constants
 from algo.datatypes import *
 from utils.general_utils import log_message as log_message_general
-from algo import position_prices_setup as setup
-from utils.logger import LoggerSingleton
-
-positions_logger = None
+from algo.Segment import Segment
 
 
 class Algo:
@@ -15,10 +12,6 @@ class Algo:
                  symbol: str,
                  timeframe: str = "15m",
                  allowed_verbosity=constants.allowed_verbosity):
-        global positions_logger
-
-        if positions_logger is None:
-            positions_logger = LoggerSingleton("positions").get_logger()
 
         self.allowed_verbosity = allowed_verbosity
         self.pair_df: pd.DataFrame = pair_df
@@ -201,9 +194,9 @@ class Algo:
 
             # Breaking
             if breaking_condition:
-                # If a breaking event has occurred, we need to find the actual CANDLE that broke the LPL, since it might have happened before the PIVOT
-                # that broke the LPL, since zigzag pivots are a much more aggregated type of data compared to the candles and almost always the actual
-                # candle that breaks the LPL is one of the candles before the pivot that was just found.
+                # If a breaking event has occurred, we need to find the actual CANDLE that broke the LPL, since it might have happened before the
+                # PIVOT that broke the LPL, since zigzag pivots are a much more aggregated type of data compared to the candles and almost always
+                # the actual candle that breaks the LPL is one of the candles before the pivot that was just found.
 
                 # The candle search range starts at the pivot before the LPL-breaking pivot (which is typically a higher order pivot) PDI and the
                 # breaking pivot PDI.
@@ -216,7 +209,7 @@ class Algo:
                     lpl_breaking_candles = breaking_candle_search_window[breaking_candle_search_window.low < breaking_value]
 
                 # If the trend is descending, the breaking candle must have a higher high than the breaking value.
-                elif trend_type == "descending":
+                else:
                     lpl_breaking_candles = breaking_candle_search_window[breaking_candle_search_window.high > breaking_value]
 
                 breaking_candle_pdi = lpl_breaking_candles.first_valid_index()
@@ -515,7 +508,7 @@ class Algo:
                     & (self.zigzag_df.pdi <= breaking_pdi)
                     & (self.zigzag_df.pivot_type == extremum_point_pivot_type)]
 
-                # The extremum pivot is the lowest low / highest high in the region between the first PBOS and the closing candle
+                # The extremum pivot is the lowest low / the highest high in the region between the first PBOS and the closing candle
                 if extremum_point_pivot_type == "peak":
                     extremum_pivot = extremum_point_pivots_of_type.loc[
                         extremum_point_pivots_of_type['pivot_value'].idxmax()]
@@ -565,8 +558,6 @@ class Algo:
                 # New lowest low is our CHOCH.
                 latest_choch_pdi = self.h_o_indices[-1]
                 latest_choch_threshold = self.zigzag_df[self.zigzag_df.pdi == latest_choch_pdi].iloc[0].pivot_value
-
-
 
             # If a CHOCH has happened, this means the pattern has inverted and should be restarted with the last LPL before the candle which closed
             # below the CHOCH.
@@ -626,13 +617,12 @@ class Algo:
 
         # return self.h_o_indices
 
-    def convert_pdis_to_times(self, pdis: Union[int, list[int]]) -> Union[pd.Timestamp, list[pd.Timestamp]]:
+    def convert_pdis_to_times(self, pdis: Union[int, list[int]]) -> Union[pd.Timestamp, list[pd.Timestamp], None]:
         """
         Convert a list (or a single) of PDIs to their corresponding times using algo.pair_df.
 
         Args:
             pdis (list[int]): List of PDIs to convert.
-            pair_df (pd.DataFrame): The pair_df DataFrame to use for the conversion.
 
         Returns:
             list[pd.Timestamp]: List of corresponding times.
@@ -659,8 +649,7 @@ class Algo:
 
 def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
                            ltf_start_time: pd.Timestamp,
-                           backtrack_window: int = constants.starting_point_backtrack_window) -> tuple[
-    pd.Timestamp, str]:
+                           backtrack_window: int = constants.starting_point_backtrack_window) -> tuple[pd.Timestamp, str]:
     """
     This function returns a starting point for the algorithm. It uses the algo object (kind of recursively) with a higher order pair_df and applies
     a higher order zigzag operator on it. The last point of the higher order zigzag before the original LTF data's starting point is set as the
@@ -727,14 +716,14 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
     starting_timestamp, starting_pivot_type = starting_point_output
 
     # The PDI of the candle in the LTF data which corresponds to the exact time found by find_last_htf_ho_pivot. This will be used to create the
-    # aggregated candles and find the lowest low/highest high candle depending on starting_pivot_type and filtering pair_df based on that.
+    # aggregated candles and find the lowest low/the highest high candle depending on starting_pivot_type and filtering pair_df based on that.
 
     initial_starting_pdi = original_pair_df[original_pair_df.time == starting_timestamp].iloc[0].name
 
     # This parameter depends on the conversion rate between the LTF and HTF timeframes
     n_aggregated_candles = int(constants.timeframe_minutes[higher_timeframe] / constants.timeframe_minutes[timeframe])
 
-    # The n_aggregated_candles-long window to find the lowest low/highest high.
+    # The n_aggregated_candles-long window to find the lowest low/the highest high.
     pair_df_window = original_pair_df.iloc[initial_starting_pdi + 1:initial_starting_pdi + n_aggregated_candles + 1]
 
     if starting_pivot_type == "low":
@@ -745,631 +734,3 @@ def create_filtered_pair_df_with_corrected_starting_point(htf_pair_df: pd.DataFr
     pair_df = original_pair_df.iloc[starting_extremum_candle_pdi:].reset_index(drop=True)
 
     return pair_df
-
-
-class OrderBlock:
-    def __init__(self, base_candle: Union[pd.Series, Candle], icl: float, ob_type: str):
-        if isinstance(base_candle, Candle):
-            self.start_index = base_candle.pdi
-        elif isinstance(base_candle, pd.Series):
-            self.start_index = base_candle.name
-        elif isinstance(base_candle, tuple):
-            self.start_index = base_candle.Index
-
-        # Identification
-        self.base_candle = base_candle
-        self.type = ob_type
-        self.id = f"OB{self.start_index}/" + gen_utils.convert_timestamp_to_readable(base_candle.time)
-        self.id += "L" if ob_type == "long" else "S"
-
-        # Geometry
-        self.top = base_candle.high
-        self.bottom = base_candle.low
-        self.height = self.top - self.bottom
-        # ICL represents the liquidity level of the initial candle, Initial Candle Liquidity. This is the (for long positions) low value of the first
-        # candle that was tested for finding the order block. This is a very important variable which is directly used for forming the positions'
-        # stoploss and targets.
-        self.icl = icl
-
-        # The position formed by the OrderBLock
-        self.position = Position(self)
-
-        # Checks and flags
-        self.is_valid = True
-        self.price_exit_index = None
-        self.price_reentry_indices = []
-        self.condition_check_window = None
-        self.has_reentry_condition = True
-        self.has_fvg_condition = None
-        self.has_stop_break_condition = None
-        self.has_been_replaced = False
-
-        # The number of times the algorithm has tried to find a replacement for this order block
-        self.times_moved = 0
-
-        # The ranking of the order block within its segment. Sequential number, meaning the first VALID OB in a segment gets assigned number 1, next
-        # one gets assigned 2, and so on
-        self.ranking_within_segment = 0
-
-    def __repr__(self):
-        return f"OB {self.id} ({self.type})"
-
-    def check_box_entries(self, pair_df: pd.DataFrame, upper_search_bound_pdi: int) -> None:
-        """
-        Method to check the entries of the box and determine its validity.
-
-        This method checks when the price candlesticks in pair_df "exit" the box and whether they re-enter the box.
-        If there is a re-entry, the box is marked as invalid. All the indices are also registered.
-
-        Args:
-            pair_df (pd.DataFrame): The DataFrame containing the price data.
-            upper_search_bound_pdi (int): The PDI of the candle to stop the search at.
-        """
-
-        # Get the subset of pair_df that we need to check
-        check_window = pair_df.iloc[self.start_index + 1:upper_search_bound_pdi + 1]
-
-        # If the box is of type "long"
-        if self.type == "long":
-            # Find the first candle where a candle opens inside the OB and closes above it
-            exit_index = check_window[(check_window['close'] > self.top) & (check_window['open'] <= self.top)].first_valid_index()
-
-            if exit_index is not None:
-                self.price_exit_index = exit_index
-                # If an exit is found, check for a reentry into the box after the exit
-                # Should use check_window.loc[exit_index:] instead of iloc because the current df is a subset of pair_df, and the indices are
-                # all messed up
-                reentry_check_window = check_window.loc[exit_index + 1:]
-                reentry_index = reentry_check_window.loc[reentry_check_window['low'] < self.top].first_valid_index()
-                # If a reentry is found, mark the box as invalid
-                if reentry_index is not None:
-                    self.price_reentry_indices.append(reentry_index)
-                    self.is_valid = False
-
-        else:  # If the box is of type "short"
-            # Find the first candle where a candle opens inside the OB and closes below it
-            exit_index = check_window[(check_window['close'] < self.bottom) & (check_window['open'] >= self.bottom)].first_valid_index()
-
-            if exit_index is not None:
-                self.price_exit_index = exit_index
-                # If an exit is found, check for a reentry into the box after the exit
-                # Should use check_window.loc[exit_index:] instead of iloc because the current df is a subset of pair_df, and the indices are
-                # all messed up
-                reentry_check_window = check_window.loc[exit_index + 1:]
-                reentry_index = reentry_check_window.loc[reentry_check_window['high'] > self.bottom].first_valid_index()
-                # If a reentry is found, mark the box as invalid
-                if reentry_index is not None:
-                    self.price_reentry_indices.append(reentry_index)
-                    # self.is_valid = False
-
-        self.form_condition_check_window(pair_df)
-
-    def form_condition_check_window(self, pair_df: pd.DataFrame) -> None:
-        """
-        Method to form the condition check window for the box. This check window is used to check the order block confirmation conditions
-        (FVG and price breaking, refer to the check_x_condition methods). The check_box_entries method should be called before this method.
-
-        Args
-            pair_df (pd.DataFrame): The DataFrame containing the price data.
-        """
-
-        if len(self.price_reentry_indices) > 0:
-            self.condition_check_window = pair_df.iloc[self.start_index:self.price_reentry_indices[0]]
-        else:
-            self.condition_check_window = pair_df.iloc[self.start_index:]
-
-    def check_reentry_condition(self, reentry_check_window: pd.DataFrame):
-        """
-        Method to check if the price returns to the  box pre-emptively, before it is fully formed from the LPL breaking it. This check is performed
-        by checking all the candles from right after the base_candle to the candle that breaks the LPL (Which is passed to this function through
-        the respective segment), and in the check window, for a long order block, we check if the LOWEST LOW of all the candles in the window pierced
-        the order block's top. For a short position, we check the HIGHEST HIGH and the bottom of the box. The has_reentry_condition property of the OB
-        object is the flag property that keeps track of the passing of this condition.
-
-        Args:
-            reentry_check_window (pd.DataFrame): A dataframe containing the candles of the window formed starting after the base_candle and before
-            the breaking of the LPL. This window will be checked for reentry in this function.
-
-        """
-
-        if self.type == "long":
-            # Check if the lowest low in the reentry check window pierces the top of the box
-            lowest_low = reentry_check_window.low.min()
-            if lowest_low <= self.top:
-                self.has_reentry_condition = False
-        else:
-            # Check if the highest high in the reentry check window pierces the bottom of the box
-            highest_high = reentry_check_window.high.max()
-            if highest_high >= self.bottom:
-                self.has_reentry_condition = False
-
-    def check_fvg_condition(self):
-        """
-        Method to check the FVG condition for the box. The method checks if the exiting candle has an FVG on it which aligns exactly with the box's
-        top/bottom for long/short cases. This method should be called after the check_box_entries method. The method sets the has_fvg_cond property
-        for the instance of the object if the check passes, otherwise it will remain false.
-
-        The method aggregates the candles before and after the exit candle using min() and max() functions and identifies the fair value gaps in the
-        exiting candle, if any exist. Then the values are checked for alignment with the box's top/bottom for long/short cases.
-        """
-
-        # aggregated_candle_after represents the candles after the exit candle. This would be a candle with the highest high and lowest low set as
-        # its high and low.
-
-        if self.price_exit_index is None:
-            self.has_fvg_condition = False
-
-        aggregated_candle_after_exit: list = [self.condition_check_window.loc[self.price_exit_index + 1:].low.min(),
-                                              self.condition_check_window.loc[self.price_exit_index + 1:].high.max()]
-        aggregated_candle_before_exit: list = [self.condition_check_window.loc[:self.price_exit_index - 1].low.min(),
-                                               self.condition_check_window.loc[:self.price_exit_index - 1].high.max()]
-
-        def find_gap(interval1, interval2):
-            if interval1[1] < interval2[0] or interval2[1] < interval1[0]:
-                # The intervals do not overlap, return the gap
-                return [min(interval1[1], interval2[1]), max(interval1[0], interval2[0])]
-            else:
-                # The intervals overlap
-                return None
-
-        def find_overlap(interval1, interval2):
-            if interval1[1] < interval2[0] or interval2[1] < interval1[0]:
-                # The intervals do not overlap
-                return None
-            else:
-                # The intervals overlap
-                return [max(interval1[0], interval2[0]), min(interval1[1], interval2[1])]
-
-        # If the before and after aggregated candle overlap, no FVG exists
-        if find_overlap(aggregated_candle_before_exit, aggregated_candle_after_exit) is not None:
-            self.has_fvg_condition = False
-
-        else:
-            fvg_exit_candle: pd.Series = self.condition_check_window.loc[self.price_exit_index]
-
-            # The overlap between the gap between the before and after candles and the exit candle's body constitutes the FVG.
-            exit_candle_body_interval: list = [min(fvg_exit_candle.open, fvg_exit_candle.close),
-                                               max(fvg_exit_candle.open, fvg_exit_candle.close)]
-            gap = find_gap(aggregated_candle_before_exit, aggregated_candle_after_exit)
-
-            fvg: list = find_overlap(exit_candle_body_interval, gap)
-
-            # If an overlap between the gap and the exit candle's body exists
-            if fvg is not None:
-                # Check if the FVG area aligns with the order block EXACTLY. If so, the check passes
-                if self.type == "long" and min(fvg) == self.top:
-                    self.has_fvg_condition = True
-                elif self.type == "short" and max(fvg) == self.bottom:
-                    self.has_fvg_condition = True
-
-                # If there isn't exact alignment, the check doesn't pass.
-                else:
-                    self.has_fvg_condition = False
-
-            # If the exit candle's body doesn't overlap with the gap, there is no FVG.
-            else:
-                self.has_fvg_condition = False
-
-    def check_stop_break_condition(self):
-        """
-        This method checks if there is a price which breaks the OrderBlock's stop level, meaning the bottom in a long OrderBlock and the top in a
-        short OrderBlock.
-
-        This method should be called after the check_box_entries method. The method sets the has_stop_break_condition property for the instance of
-        the object accordingly.
-        """
-
-        # Find candles which break the stop level, if any.
-        stop_breaking_candles: pd.DataFrame
-        if self.type == "long":
-            stop_breaking_candles = self.condition_check_window[self.condition_check_window['low'] < self.bottom]
-        else:
-            stop_breaking_candles = self.condition_check_window[self.condition_check_window['high'] > self.top]
-
-        # If there are any candles in the condition check window which break the order block's stop level, the check fails.
-        if len(stop_breaking_candles) > 0:
-            self.has_stop_break_condition = False
-        else:
-            self.has_stop_break_condition = True
-
-
-class Segment:
-    """
-    A segment is a series of candles during which the order blocks specified in Segment.ob_list do not change, so it would be safe to check for
-    entry to these order blocks WITHIN this segment. After the expiration candle of the segment, indicated by Segment.end_pdi, entry to the order
-    blocks isn't permitted, and we move on to the next segment.
-    """
-
-    def __init__(self, start_pdi: int,
-                 end_pdi: int,
-                 ob_leg_start_pdi: int,
-                 ob_leg_end_pdi: int,
-                 top_price: float,
-                 bottom_price: float,
-                 ob_formation_start_pdi: int,
-                 broken_lpl_pdi: int,
-                 type: str,
-                 formation_method: str = "bos"):
-        self.end_pdi = end_pdi
-        self.start_pdi = start_pdi
-        self.ob_leg_start_pdi = ob_leg_start_pdi
-        self.ob_leg_end_pdi = ob_leg_end_pdi
-        self.top_price = top_price
-        self.bottom_price = bottom_price
-        self.ob_formation_start_pdi = ob_formation_start_pdi
-        self.broken_lpl_pdi = broken_lpl_pdi
-        self.type = type
-        self.formation_method = formation_method
-
-        if constants.logs_format != "time":
-            self.id = f"SEG/{self.formation_method}/{self.start_pdi}"
-
-        self.ob_list: list[OrderBlock] = []
-        self.pair_df: pd.DataFrame = pd.DataFrame()
-
-    def __repr__(self):
-        return f"{self.type.capitalize()} segment starting at {self.start_pdi} ending at {self.end_pdi} OB formation at {self.ob_formation_start_pdi}"
-
-    def filter_candlestick_range(self, algo: Algo):
-        """
-        This method defines the range of pair_df which is used to find box entries. This is useful for checking order block entries. This section is
-        defined as the candles between the OB formation start and the end of the segment, inclusive. The inclusivity is important because in the code
-        a segment's bounds are defined as such.
-        """
-        self.pair_df = algo.pair_df.iloc[self.ob_formation_start_pdi:self.end_pdi + 1]
-
-        if constants.logs_format == "time":
-            self.id = f"SEG/{self.formation_method}/{algo.pair_df.loc[self.start_pdi].time}"
-
-    def find_order_blocks(self, algo: Algo):
-        """
-        This method identifies the order blocks specific to the segment by taking the entire Algo object as an input, as many of its properties and
-        methods are useful here, and it would be redundant to pass around multiple inputs and methods. This method populates the Segment.ob_list
-        object with a list of order blocks that are only valid within this segment.
-
-        Args:
-            algo: The Algo object
-        """
-        positions_logger.debug(f"Finding order blocks for segment {self.id}")
-
-        # For testing and safety purposes, the ob_list property is reset.
-        self.ob_list = []
-
-        # base_candle_type is the type of the pivot that is used to filter the zigzag_df dataframe for the correct pivot type. In ascending segments
-        # (patterns) the type is valley, and in descending segments it's peak.
-        base_pivot_type = "valley" if self.type == "ascending" else "peak"
-
-        # This variable is used to keep track of how many valid order blocks have been found. It is then assigned to each order block within the
-        # segment, so it's ranking in the segment is recorded.
-        valid_ob_counter = 0
-
-        # Filter pivots of the correct type (valley for ascending, peak for descending) and pivots that are within the first leg. Also omit the pivots
-        # that have a higher PDI than the broken LPL PDI, meaning the boxes that form above the broken LPL in ascending and below the LPL in
-        # descending
-
-        for pivot in algo.zigzag_df[(algo.zigzag_df.pivot_type == base_pivot_type) &
-                                    (self.ob_leg_start_pdi <= algo.zigzag_df.pdi) &
-                                    (algo.zigzag_df.pdi < self.broken_lpl_pdi)].itertuples():
-
-            if constants.logs_format == "time":
-                positions_logger.debug(f"\tFinding OBs for lower order leg starting at {algo.convert_pdis_to_times(pivot.pdi)}")
-            else:
-                positions_logger.debug(f"\tFinding OBs for lower order leg starting at {pivot.pdi}")
-
-            # This try-except block is used to determine the window that is used for finding replacement order blocks in the chart. Currently, the
-            # window spans from the very first base candle (the pivot found using the outer loop) to the lower-order pivot immediately after it.
-            # The except clause catches the error in case we reach the end of the chart and no more next pivots exist, in which case the end of the
-            # search window is set to the last candle of the whole dataset.
-            try:
-                next_pivot_pdi = algo.find_relative_pivot(pivot.pdi, 1)
-                replacement_ob_threshold_pdi = next_pivot_pdi
-            except IndexError:
-                replacement_ob_threshold_pdi = algo.pair_df.last_valid_index()
-
-            if constants.logs_format == "time":
-                positions_logger.debug(f"\tReplacement OB search threshold set up to {algo.convert_pdis_to_times(replacement_ob_threshold_pdi)}")
-            else:
-                positions_logger.debug(f"\tReplacement OB search threshold set up to {replacement_ob_threshold_pdi}")
-
-            # times_moved indicates the times the algorithm had to move the base candle to find a replacement order block.
-            times_moved = 0
-
-            # The stoploss is set at the pivot value of the INITIAL box that was found, since that's the box which has the liquidity. This value is
-            # passed to the OB instantiation line as the stoploss value, which in turn goes to the Position attribute within it.
-            initial_pivot_candle_liquidity = pivot.pivot_value
-
-            for base_candle_pdi in range(pivot.pdi, replacement_ob_threshold_pdi):
-                base_candle = algo.pair_df.iloc[base_candle_pdi]
-                ob = OrderBlock(base_candle=base_candle,
-                                icl=initial_pivot_candle_liquidity,
-                                ob_type="long" if base_pivot_type == "valley" else "short")
-
-                if constants.logs_format == "time":
-                    positions_logger.debug(f"\t\tInvestigating base candle at {algo.convert_pdis_to_times(base_candle_pdi)}")
-                else:
-                    positions_logger.debug(f"\t\tInvestigating base candle at {base_candle_pdi}")
-
-                # the check_box_entries method finds any entry point to each box. These entry points can later be used and we can check if the entries
-                # are within the respective segments. This method also sets the condition check window at the end, which is used to check if the boxes
-                # satisfy the confirmation conditions. The search upper bound is the last candle of the segment.
-                ob.check_box_entries(algo.pair_df, self.end_pdi)
-
-                # The reentry window dataframe is used to check whether the price returned to the box in the span between the exit candle and the LPL
-                # breaking candle. This is checked using the check_reentry_condition() method of the OrderBlock object. The reentry dataframe is
-                # passed as an argument to the method.
-                if ob.price_exit_index is not None:
-                    reentry_check_window: pd.DataFrame = algo.pair_df.iloc[ob.price_exit_index + 1:self.ob_formation_start_pdi]
-
-                    # Log the exit candle location
-                    if constants.logs_format == "time":
-                        positions_logger.debug(
-                            f"\t\t\tExit candle found at {algo.convert_pdis_to_times(ob.price_exit_index)}")
-                    else:
-                        positions_logger.debug(f"\t\t\tExit candle found at {ob.price_exit_index}")
-
-                    if constants.logs_format == "time":
-                        positions_logger.debug(
-                            f"\t\t\tReentry check window set up from {algo.convert_pdis_to_times(ob.price_exit_index + 1)} to {algo.convert_pdis_to_times(self.ob_formation_start_pdi - 1)}")
-                    else:
-                        positions_logger.debug(
-                            f"\t\t\tReentry check window set up from {ob.price_exit_index + 1} to {self.ob_formation_start_pdi - 1}")
-
-                # This else statement is implemented to account for boxes which don't have an exit candle which opens inside and closes outside of
-                # them, automatically making them invalid and prompting considering another replacement.
-                else:
-                    positions_logger.debug("\t\t\tNo exit candle found. OB is invalid, looking for a replacement further in time.")
-                    continue
-
-                # This check ensures that the order block being processed is totally valid to be used AFTER the formation of the pattern, that means
-                # that the order block has either A) had no reentry at all or B) has had its reentry after the formation of the pattern.
-                # ob_is_valid_in_formation_region = len(ob.price_reentry_indices) == 0 or ob.price_reentry_indices[0] > self.ob_formation_start_pdi
-                ob.check_reentry_condition(reentry_check_window)
-                ob.check_fvg_condition()
-                ob.check_stop_break_condition()
-
-                positions_logger.debug(f"\t\t\tReentry check status: {ob.has_reentry_condition}")
-                positions_logger.debug(f"\t\t\tFVG check status: {ob.has_fvg_condition}")
-                positions_logger.debug(f"\t\t\tStop break check status: {ob.has_stop_break_condition}")
-                if ob.has_reentry_condition and ob.has_fvg_condition and ob.has_stop_break_condition:
-                    positions_logger.debug(f"\t\t\tAll checks passed, adding OB with ID {ob.id}")
-                    valid_ob_counter += 1
-
-                    ob.ranking_within_segment = valid_ob_counter
-
-                    ob.times_moved = times_moved
-                    ob.has_been_replaced = False
-                    self.ob_list.append(ob)
-                    break
-
-                else:
-                    positions_logger.debug("\t\t\tOne or more checks didn't pass, moving to next candle...")
-                    ob.has_been_replaced = True
-
-                times_moved += 1
-
-        positions_logger.debug(f"End of finding order blocks for segment {self.id}")
-        positions_logger.debug("")
-
-
-class Position:
-    def __init__(self, parent_ob: OrderBlock):
-
-        self.parent_ob = parent_ob
-        self.entry_price = parent_ob.top if parent_ob.type == "long" else parent_ob.bottom
-
-        # Calculation of stoploss is done using the distance from the entry of the box to the initial candle that was checked for OB, before being
-        # potentially replaced. This distance is denoted as EDICL, entry distance from initial candle liquidity.
-        self.edicl = abs(parent_ob.icl - self.entry_price)
-
-        self.type = parent_ob.type
-
-        self.status: str = "ACTIVE"
-        self.entry_pdi = None
-        self.qty: float = 0
-        self.highest_target: int = 0
-        self.target_hit_pdis: list[int] = []
-        self.exit_pdi = None
-        self.portioned_qty = []
-        self.net_profit = None
-
-        self.target_list = []
-        self.stoploss = None
-        # Set up the targt list nd stoploss using a function which operates on the "self" object and directly manipulates the instance.
-        setup.default_357(self)
-
-    def find_entry_within_segment(self, segment: Segment) -> Union[int, None]:
-        """
-        This method analyzes the candles within the segment's entry region to see if any candle enters the position.
-
-        Args:
-            segment (Segment): The segment with the filtered candles ready to be checked for entry
-
-        Returns:
-            Union[int, None]: The index of the candle entering the position, or None if no candle enters the position
-        """
-        if self.type == "long":
-            entering_candles: pd.DataFrame = segment.pair_df[segment.pair_df.low <= self.entry_price]
-        else:
-            entering_candles: pd.DataFrame = segment.pair_df[segment.pair_df.high >= self.entry_price]
-
-        if len(entering_candles) > 0:
-            return entering_candles.first_valid_index()
-        else:
-            return None
-
-    def enter(self, entry_pdi: int):
-        """
-        Method to enter the OB. This method sets the current OB status to "ENTERED", and registers the entry PDI, entry price, and quantity of the
-        entry.
-
-        Args:
-            entry_pdi (int): The PDI at which the entry is made
-        """
-
-        self.entry_pdi = entry_pdi
-        self.qty = constants.used_capital / self.entry_price
-        self.status = "ENTERED"
-
-    def register_target(self, target_id: int, target_registry_pdi: int):
-        """
-        This method registers a new highest target on the position to later use in calculating the PNL. If the target being registered is the highest
-        target, it also triggers an exit command.
-
-        Args:
-            target_id (int): The ID of the target to register. Must be higher than 0 since the default value is zero.
-            target_registry_pdi (int): The PDI of the candle registering the target(s)
-        """
-
-        # First, for safety, check if the target being registered is actually higher than the highest registered target
-        if target_id > self.highest_target:
-            # Register all the non-hit targets with the PDI of the candle hitting them
-            self.target_hit_pdis.extend([target_registry_pdi] * (target_id - self.highest_target))
-
-            self.highest_target = target_id
-
-    def register_stoploss(self):
-        """
-        This method triggers a stoploss registration on the position. The exit_code STOPLOSS is then used to call the exit function and calculate the
-        PNL
-        """
-        self.exit(exit_code="STOPLOSS")
-
-    def exit(self, exit_code: Literal["STOPLOSS", "FULL_TARGET"], exit_pdi: int):
-        """
-        This method exits an entered order block with an exit code. If the exit code is "STOPLOSS" that means the position is exiting due to hitting
-        the stoploss level. Otherwise, if the exit code is "FULL_TARGET" that means the last target has been hit and therefore the maximum possible
-        profit should be registered. If a "STOPLOSS" event happens, the profit is calculated using the highest registered target, accounting for
-        losses from the stoploss and gains from the targets separately. The net profit is then registered into the Position.net_profit property.
-
-        Args:
-            exit_code (str): How the position has been exit.
-            exit_pdi (int): At which candle the exit happens
-        """
-
-        self.exit_pdi = exit_pdi
-
-        # Even distribution of quantities
-        self.portioned_qty = [self.qty / len(self.target_list) for target in self.target_list]
-
-        n_targets = len(self.target_list)
-        # If the position is exiting due to hitting a stoploss
-        if exit_code == "STOPLOSS":
-
-            # If we do have any registered targets, set the highest registered target as the final status
-            if self.highest_target > 0:
-                self.status = f"TARGET_{self.highest_target}"
-
-            # Otherwise, just report a STOPLOSS
-            else:
-                self.status = "STOPLOSS"
-
-            # If the position is long, this means that we have one loss: a loss from purchasing the asset at entry, and we have two gains: a loss
-            # from selling the remainder of the asset at stoploss and another for selling each portioned quantity at each target hit.
-            if self.type == "long":
-                loss_from_entry = self.entry_price * self.qty
-                gain_from_stop = sum(self.portioned_qty[self.highest_target:]) * self.stoploss
-                gain_from_targets = sum([self.portioned_qty[i] * self.target_list[i] for i in range(self.highest_target)])
-
-                total_position_gain = gain_from_stop + gain_from_targets
-                total_position_loss = loss_from_entry
-
-            # If the position is short, this means that we have one gain: a gain from selling the asset at entry, and we have two losses: a loss from
-            # buying the remainder of the asset at stoploss and another for buying each portioned quantity at each target hit.
-            else:
-                gain_from_entry = self.entry_price * self.qty
-                loss_from_stop = sum(self.portioned_qty[self.highest_target:]) * self.stoploss
-                loss_from_targets = sum([self.portioned_qty[i] * self.target_list[i] for i in range(self.highest_target)])
-
-                total_position_gain = gain_from_entry
-                total_position_loss = loss_from_stop + loss_from_targets
-
-        # If a full target has been hit, report it as such
-        elif exit_code == "FULL_TARGET":
-            self.status = f"FULL_TARGET_{self.highest_target}"
-
-            # If the position has achieved full targets, we have the same codes for calculating net profit, only with the omission of stoploss
-            # loss/gains. All the target calculations will also use the entire target_list property instead of the spliced version
-            if self.type == "long":
-                total_position_loss = self.entry_price * self.qty
-                total_position_gain = sum([qty_target[0] * qty_target[1] for qty_target in zip(self.portioned_qty, self.target_list)])
-
-            else:
-                total_position_gain = self.entry_price * self.qty
-                total_position_loss = sum([qty_target[0] * qty_target[1] for qty_target in zip(self.portioned_qty, self.target_list)])
-
-        self.net_profit = total_position_gain - total_position_loss
-
-    def does_candle_stop(self, candle):
-        """
-        This method checks if the candle stops the position. This is done by checking if the candle's low is lower than the stoploss in the case of
-        long positions, and if the candle's high is higher than the stoploss in the case of short positions.
-
-        Args:
-            candle (pd.Series): The candle to check for stopping
-
-        Returns:
-            bool: True if the candle stops the position, False otherwise
-        """
-
-        if self.type == "long":
-            return candle.low <= self.stoploss
-        else:
-            return candle.high >= self.stoploss
-
-    def detect_candle_sentiment(self, candle: pd.Series) -> tuple[str, Union[int, None]]:
-        """
-        This method checks which target (or stoploss) the candle argument breaks. The method is used to determine if the position should be exited.
-        This method uses the candle's color to determine which of the stoploss or targets were hit first.
-
-        Args:
-            candle (pd.Series): The candle to check for target/stoploss
-
-        Returns:
-            tuple: A tuple containing a sentiment ("TARGET" , "FULL_TARGET", "STOPLOSS" or "NONE") and an int, for the case where the candle registers a
-            target. If a candle registers a stoploss, the int is 0.
-        """
-
-        def last_element_bigger_than(targets: list[float], price: float):
-            for i in reversed(range(len(targets))):
-                if targets[i] >= price:
-                    return i + 1
-            return 0
-
-        def last_element_smaller_than(targets: list[float], price: float):
-            for i in reversed(range(len(targets))):
-                if targets[i] <= price:
-                    return i + 1
-            return 0
-
-        # Long order blocks
-        if self.type == "long":
-            highest_target = last_element_smaller_than(self.target_list, candle.high)
-        # Short order blocks
-        else:
-            highest_target = last_element_bigger_than(self.target_list, candle.low)
-
-        # If the candle is green, it means the price is going up, and the bottom of the box should be checked first
-        if candle.close > candle.open:
-            if self.does_candle_stop(candle):
-                return "STOPLOSS", None
-
-            if highest_target > self.highest_target:
-                if highest_target < len(self.target_list):
-                    return "TARGET", highest_target
-
-                elif highest_target == len(self.target_list):
-                    return "FULL_TARGET", None
-
-        # If the candle is red, it means the price is going down, and the top of the box should be checked first
-        else:
-            if highest_target > self.highest_target:
-                if highest_target < len(self.target_list):
-                    return "TARGET", highest_target
-
-                elif highest_target == len(self.target_list):
-                    return "FULL_TARGET", None
-
-            if self.does_candle_stop(candle):
-                return "STOPLOSS", None
-
-        return "NONE", None
