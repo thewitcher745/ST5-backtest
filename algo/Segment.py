@@ -5,7 +5,8 @@ import constants
 from algo.OrderBlock import OrderBlock
 from utils.logger import LoggerSingleton
 
-positions_logger = None
+# noinspection PyTypeChecker
+positions_logger: Logger = None
 
 
 class Segment:
@@ -51,7 +52,7 @@ class Segment:
     def __repr__(self):
         return f"{self.type.capitalize()} segment starting at {self.start_pdi} ending at {self.end_pdi} OB formation at {self.ob_formation_start_pdi}"
 
-    def filter_candlestick_range(self, algo: "Algo"):
+    def filter_candlestick_range(self, algo):
         """
         This method defines the range of pair_df which is used to find box entries. This is useful for checking order block entries. This section is
         defined as the candles between the OB formation start and the end of the segment, inclusive. The inclusivity is important because in the code
@@ -63,7 +64,7 @@ class Segment:
             self.id = f"SEG/{self.formation_method}/{algo.pair_df.loc[self.start_pdi].time}"
 
     # noinspection LongLine
-    def find_order_blocks(self, algo: "Algo"):
+    def find_order_blocks(self, algo):
         """
         This method identifies the order blocks specific to the segment by taking the entire Algo object as an input, as many of its properties and
         methods are useful here, and it would be redundant to pass around multiple inputs and methods. This method populates the Segment.ob_list

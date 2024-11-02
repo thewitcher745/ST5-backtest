@@ -6,7 +6,7 @@ import constants
 
 
 class Position:
-    def __init__(self, parent_ob: "OrderBlock"):
+    def __init__(self, parent_ob):
         self.parent_ob = parent_ob
         self.entry_price = parent_ob.top if parent_ob.type == "long" else parent_ob.bottom
 
@@ -27,10 +27,10 @@ class Position:
 
         self.target_list = []
         self.stoploss = None
-        # Set up the targt list nd stoploss using a function which operates on the "self" object and directly manipulates the instance.
+        # Set up the target list nd stoploss using a function which operates on the "self" object and directly manipulates the instance.
         setup.default_357(self)
 
-    def find_entry_within_segment(self, segment: "Segment") -> Union[int, None]:
+    def find_entry_within_segment(self, segment) -> Union[int, None]:
         """
         This method analyzes the candles within the segment's entry region to see if any candle enters the position.
 
