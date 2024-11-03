@@ -1,39 +1,38 @@
 import logging
 from datetime import datetime
-from utils.config import Config
 
 
 class LoggerSingleton:
-    _instance = None
+    _loggers = {}
 
-    def __new__(cls, name: str):
-        if cls._instance is None:
-            cls._instance = super(LoggerSingleton, cls).__new__(cls)
-            cls._instance._initialize(name)
-        return cls._instance
+    @classmethod
+    def get_logger(cls, name: str):
+        if name not in cls._loggers:
+            cls._loggers[name] = cls._create_logger(name)
+        return cls._loggers[name]
 
-    def _initialize(self, name: str):
-        self.name = name
-        self.logger = logging.getLogger(name)
-        self.logger.setLevel(logging.DEBUG)
+    @classmethod
+    def _create_logger(cls, name: str):
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.DEBUG)
+        return logger
 
-    def update_pair_name(self, pair_name: str):
+    @classmethod
+    def update_pair_name(cls, name: str, pair_name: str):
+        logger = cls.get_logger(name)
         # Remove existing file handlers
-        for handler in self.logger.handlers[:]:
+        for handler in logger.handlers[:]:
             if isinstance(handler, logging.FileHandler):
-                self.logger.removeHandler(handler)
+                logger.removeHandler(handler)
                 handler.close()
 
         # Create a new file handler with the updated pair_name
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"./logs/{self.name}_{timestamp}-{pair_name}.log"
+        log_filename = f"./logs/{name}_{timestamp}-{pair_name}.log"
         file_handler = logging.FileHandler(log_filename)
         file_handler.setLevel(logging.DEBUG)
 
         formatter = logging.Formatter('%(message)s')
         file_handler.setFormatter(formatter)
 
-        self.logger.addHandler(file_handler)
-
-    def get_logger(self):
-        return self.logger
+        logger.addHandler(file_handler)
