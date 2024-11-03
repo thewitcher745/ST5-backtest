@@ -4,7 +4,6 @@ from openpyxl import load_workbook
 
 import utils.general_utils as gu
 from algo.Algo import Algo, create_filtered_pair_df_with_corrected_starting_point
-from utils.logger import LoggerSingleton
 
 
 def run_algo(pair_name: str, timeframe: str):
@@ -26,17 +25,15 @@ def run_algo(pair_name: str, timeframe: str):
     # Higher timeframe data for determining starting point
     htf_pair_df: pd.DataFrame = gu.load_higher_tf_data(pair_name=pair_name, timeframe=higher_timeframe)
 
-    gu.reset_logs()
-
     # --------------------------------------------------------
     # Calculate the starting point and higher order zigzag
-    algo = Algo(pair_df, pair_name, allowed_verbosity=0)
+    algo = Algo(pair_df, pair_name)
     initial_data_start_time = algo.pair_df.iloc[0].time
 
     corrected_pair_df = create_filtered_pair_df_with_corrected_starting_point(htf_pair_df, initial_data_start_time,
                                                                               original_pair_df, timeframe, higher_timeframe)
 
-    algo = Algo(corrected_pair_df, "BTCUSDT", allowed_verbosity=0)
+    algo = Algo(corrected_pair_df, "BTCUSDT")
 
     algo.init_zigzag(last_pivot_type="valley", last_pivot_candle_pdi=0)
     h_o_starting_point: int = algo.zigzag_df.iloc[0].pdi

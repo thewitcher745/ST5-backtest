@@ -1,19 +1,25 @@
+from logging import Logger
 from typing import Optional
 import pandas as pd
 
 import constants
 from algo.datatypes import *
-from utils.general_utils import log_message as log_message_general
 from algo.Segment import Segment
+from utils.logger import LoggerSingleton
+
+# noinspection PyTypeChecker
+ho_zigzag_logger: Logger = None
 
 
 class Algo:
     def __init__(self, pair_df: pd.DataFrame,
                  symbol: str,
-                 timeframe: str = "15m",
-                 allowed_verbosity=constants.allowed_verbosity):
+                 timeframe: str = "15m"):
+        global ho_zigzag_logger
 
-        self.allowed_verbosity = allowed_verbosity
+        if ho_zigzag_logger is None:
+            ho_zigzag_logger = LoggerSingleton.get_logger("ho_zigzag")
+
         self.pair_df: pd.DataFrame = pair_df
         self.symbol: str = symbol
         self.zigzag_df: Optional[pd.DataFrame] = None
@@ -39,16 +45,6 @@ class Algo:
         # starting_pdi is the starting point of the entire pattern, calculated using __init_pattern_start_pdi. This method is
         # executed in the calc_h_o_zigzag method.
         self.starting_pdi = 0
-
-    def log_message(self, *messages, v: int = 3):
-        """
-        Method to log messages with a verbosity check.
-
-        Args:
-            *messages: List of messages in print() argument format
-            v (int): Allowed verbosity level for the message
-        """
-        log_message_general(*messages, v=v, av=self.allowed_verbosity)
 
     def init_zigzag(self, last_pivot_type=None, last_pivot_candle_pdi=None) -> None:
         """
@@ -174,7 +170,7 @@ class Algo:
 
         starting_pivot = self.zigzag_df[self.zigzag_df.pdi == search_window_start_pdi].iloc[0]
         trend_type = "ascending" if starting_pivot.pivot_type == "valley" else "descending"
-        self.log_message("Trend type is", trend_type, v=3)
+        ho_zigzag_logger.debug(f"Trend type is {trend_type}")
 
         # Breaking and extension pdi and values represent the values to surpass for registering a higher high (extension) of a lower low (breaking)
         breaking_pdi = search_window_start_pdi
@@ -219,9 +215,9 @@ class Algo:
                     breaking_candle_pdi = row.pdi
 
                 if constants.logs_format == "time":
-                    self.log_message("LPL #", breaking_pdi, "broken at", self.convert_pdis_to_times(breaking_candle_pdi), v=1)
+                    ho_zigzag_logger.debug(f"LPL #{self.convert_pdis_to_times(breaking_pdi)} broken at {self.convert_pdis_to_times(breaking_candle_pdi)}")
                 else:
-                    self.log_message("LPL #", breaking_pdi, "broken at", breaking_candle_pdi, v=1)
+                    ho_zigzag_logger.debug(f"LPL #{breaking_pdi} broken at {breaking_candle_pdi}")
 
                 return self.zigzag_df[self.zigzag_df.pdi == breaking_pdi].iloc[0], breaking_candle_pdi
 
@@ -233,9 +229,9 @@ class Algo:
                 prev_pivot = self.zigzag_df[self.zigzag_df.pdi == prev_pivot_pdi].iloc[0]
 
                 if constants.logs_format == "time":
-                    self.log_message("Changing breaking_pdi to", self.convert_pdis_to_times(prev_pivot.pdi))
+                    ho_zigzag_logger.debug(f"Changing breaking_pdi to {self.convert_pdis_to_times(prev_pivot.pdi)}")
                 else:
-                    self.log_message("Changing breaking_pdi to", prev_pivot.pdi)
+                    ho_zigzag_logger.debug(f"Changing breaking_pdi to {prev_pivot.pdi}")
                 breaking_pdi = prev_pivot.pdi
                 breaking_value = prev_pivot.pivot_value
                 extension_value = row.pivot_value
@@ -375,9 +371,9 @@ class Algo:
         latest_choch_pdi = self.starting_pdi
         latest_choch_threshold: float = self.zigzag_df[self.zigzag_df.pdi == self.starting_pdi].iloc[0].pivot_value
         if constants.logs_format == "time":
-            self.log_message("Added starting point", self.convert_pdis_to_times(self.starting_pdi), v=1)
+            ho_zigzag_logger.debug(f"Added starting point {self.convert_pdis_to_times(self.starting_pdi)}")
         else:
-            self.log_message("Added starting point", self.starting_pdi, v=1)
+            ho_zigzag_logger.debug(f"Added starting point {self.starting_pdi}")
 
         # The starting point of each pattern. This resets and changes whenever the pattern needs to be restarted. Unlike self.starting_pdi this DOES
         # change.
@@ -389,10 +385,7 @@ class Algo:
         # The loop which continues until the end of the pattern is reached.
         while True:
             # Spacing between each iteration
-            if constants.logs_format == "time":
-                self.log_message("", v=1)
-            else:
-                self.log_message("", v=1)
+            ho_zigzag_logger.debug("")
 
             # Find the first broken LPL after the starting point and the region starting point
             broken_lpl_output_set = self.detect_first_broken_lpl(pattern_start_pdi)
@@ -400,20 +393,21 @@ class Algo:
             # If no broken LPL can be found, just quit
             if broken_lpl_output_set is None:
                 if constants.logs_format == "time":
-                    self.log_message("Reached end of chart, no more broken LPL's.", v=1)
+                    ho_zigzag_logger.debug("Reached end of chart, no more broken LPL's.")
                 else:
-                    self.log_message("Reached end of chart, no more broken LPL's.", v=1)
+                    ho_zigzag_logger.debug("Reached end of chart, no more broken LPL's.")
                 break
+
             else:
                 broken_lpl = broken_lpl_output_set[0]
                 lpl_breaking_pdi: int = broken_lpl_output_set[1]
 
             if constants.logs_format == "time":
-                self.log_message("Starting pattern at", self.convert_pdis_to_times(pattern_start_pdi), v=3)
-                self.log_message("Broken LPL is at", self.convert_pdis_to_times(broken_lpl.pdi), v=3)
+                ho_zigzag_logger.debug(f"Starting pattern at {self.convert_pdis_to_times(pattern_start_pdi)}")
+                ho_zigzag_logger.debug(f"Broken LPL is at {self.convert_pdis_to_times(broken_lpl.pdi)}")
             else:
-                self.log_message("Starting pattern at", pattern_start_pdi, v=3)
-                self.log_message("Broken LPL is at", broken_lpl.pdi, v=3)
+                ho_zigzag_logger.debug(f"Starting pattern at {pattern_start_pdi}")
+                ho_zigzag_logger.debug(f"Broken LPL is at {broken_lpl.pdi}")
 
             # If the LPL type is valley, it means the trend type is ascending
             trend_type = "ascending" if broken_lpl.pivot_type == "valley" else "descending"
@@ -430,17 +424,18 @@ class Algo:
                 # Add the BOS to the HO indices
                 self.h_o_indices.append(bos_pdi)
                 if constants.logs_format == "time":
-                    self.log_message("Added BOS", self.convert_pdis_to_times(bos_pdi), v=1)
-                    self.log_message("HO indices", self.convert_pdis_to_times(self.h_o_indices), v=2)
+                    ho_zigzag_logger.debug(f"Added BOS {self.convert_pdis_to_times(bos_pdi)}")
+                    ho_zigzag_logger.debug(f"HO indices {self.convert_pdis_to_times(self.h_o_indices)}")
                 else:
-                    self.log_message("Added BOS", bos_pdi, v=1)
-                    self.log_message("HO indices", self.h_o_indices, v=2)
+                    ho_zigzag_logger.debug(f"Added BOS {bos_pdi}")
+                    ho_zigzag_logger.debug(f"HO indices {self.h_o_indices}")
 
             if constants.logs_format == "time":
-                self.log_message("CHOCH threshold is at", self.convert_pdis_to_times(latest_choch_pdi), "BOS threshold is at",
-                                 self.convert_pdis_to_times(latest_pbos_pdi), v=2)
+                ho_zigzag_logger.debug(
+                    f"CHOCH threshold is at {self.convert_pdis_to_times(latest_choch_pdi)} BOS threshold is at "
+                    f"{self.convert_pdis_to_times(latest_pbos_pdi)}")
             else:
-                self.log_message("CHOCH threshold is at", latest_choch_pdi, "BOS threshold is at", latest_pbos_pdi, v=2)
+                ho_zigzag_logger.debug(f"CHOCH threshold is at {latest_choch_pdi} BOS threshold is at {latest_pbos_pdi}")
 
             # Add the first found PBOS to the list as that is needed to kickstart the h_o_zigzag
             self.pbos_indices.append(bos_pdi)
@@ -462,10 +457,11 @@ class Algo:
             # statement doesn't set latest_pbos_pdi to None, the pattern will not restart.
             if breaking_sentiment == "PBOS_SHADOW":
                 if constants.logs_format == "time":
-                    self.log_message("PBOS #", self.convert_pdis_to_times(latest_pbos_pdi), "broken by candle shadow at index",
-                                     self.convert_pdis_to_times(breaking_pdi), v=2)
+                    ho_zigzag_logger.debug(
+                        f"PBOS # {self.convert_pdis_to_times(latest_pbos_pdi)} broken by candle shadow at index"
+                        f" {self.convert_pdis_to_times(breaking_pdi)}")
                 else:
-                    self.log_message("PBOS #", latest_pbos_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
+                    ho_zigzag_logger.debug(f"PBOS # {latest_pbos_pdi} broken by candle shadow at index {breaking_pdi}")
 
                 latest_pbos_pdi = breaking_pdi
                 latest_pbos_threshold = self.pair_df.iloc[breaking_pdi].high if trend_type == "ascending" else \
@@ -474,10 +470,11 @@ class Algo:
             # If a candle breaks the CHOCH with its shadow (And ONLY its shadow, not its close value), update the latest CHOCH pdi and threshold
             elif breaking_sentiment == "CHOCH_SHADOW":
                 if constants.logs_format == "time":
-                    self.log_message("CHOCH #", self.convert_pdis_to_times(latest_choch_pdi), "broken by candle shadow at index",
-                                     self.convert_pdis_to_times(breaking_pdi), v=2)
+                    ho_zigzag_logger.debug(
+                        f"CHOCH # {self.convert_pdis_to_times(latest_choch_pdi)} broken by candle shadow at index"
+                        f" {self.convert_pdis_to_times(breaking_pdi)}")
                 else:
-                    self.log_message("CHOCH #", latest_choch_pdi, "broken by candle shadow at index", breaking_pdi, v=2)
+                    ho_zigzag_logger.debug(f"CHOCH # {latest_choch_pdi} broken by candle shadow at index {breaking_pdi}")
 
                 latest_choch_pdi = breaking_pdi
                 latest_choch_threshold = self.pair_df.iloc[breaking_pdi].low if trend_type == "ascending" else \
@@ -488,15 +485,14 @@ class Algo:
             # this extremum, we add it to HO Zigzag.
             elif breaking_sentiment == "PBOS_CLOSE":
                 if constants.logs_format == "time":
-                    self.log_message("Candle at index",
-                                     self.convert_pdis_to_times(breaking_pdi), "broke the last PBOS #", self.convert_pdis_to_times(latest_pbos_pdi),
-                                     "with its close price", v=2)
-                    self.log_message("BOS #", self.convert_pdis_to_times(self.h_o_indices[-1]), "break at", self.convert_pdis_to_times(breaking_pdi),
-                                     v=1)
+                    ho_zigzag_logger.debug(
+                        f"Candle at index {self.convert_pdis_to_times(breaking_pdi)} broke the last PBOS # "
+                        f"{self.convert_pdis_to_times(latest_pbos_pdi)} with its close price")
+                    ho_zigzag_logger.debug(
+                        f"BOS # {self.convert_pdis_to_times(self.h_o_indices[-1])} break at {self.convert_pdis_to_times(breaking_pdi)}")
                 else:
-                    self.log_message("Candle at index",
-                                     breaking_pdi, "broke the last PBOS #", latest_pbos_pdi, "with its close price", v=2)
-                    self.log_message("BOS #", self.h_o_indices[-1], "break at", breaking_pdi, v=1)
+                    ho_zigzag_logger.debug(f"Candle at index {breaking_pdi} broke the last PBOS # {latest_pbos_pdi} with its close price")
+                    ho_zigzag_logger.debug(f"BOS # {self.h_o_indices[-1]} break at {breaking_pdi}")
 
                 # The extremum point is the point found using a "lowest low" of a "highest high" search between the last HO pivot and
                 # the closing candle
@@ -521,9 +517,9 @@ class Algo:
                 extremum_type = "lowest low" if trend_type == "ascending" else "highest high"
 
                 if constants.logs_format == "time":
-                    self.log_message("Added extremum of type", extremum_type, "at", self.convert_pdis_to_times(extremum_pivot.pdi), v=1)
+                    ho_zigzag_logger.debug(f"Added extremum of type {extremum_type} at {self.convert_pdis_to_times(extremum_pivot.pdi)}")
                 else:
-                    self.log_message("Added extremum of type", extremum_type, "at", extremum_pivot.pdi, v=1)
+                    ho_zigzag_logger.debug(f"Added extremum of type {extremum_type} at {extremum_pivot.pdi}")
 
                 # Now, we can restart finding HO pivots. Starting point is set to the last LPL of the same type BEFORE the BOS breaking candle.
                 # Trend stays the same since no CHOCH has occurred.
@@ -533,9 +529,9 @@ class Algo:
 
                 pattern_start_pdi = pivots_of_type_before_closing_candle.iloc[-1].pdi
                 if constants.logs_format == "time":
-                    self.log_message("Setting pattern start to", self.convert_pdis_to_times(pattern_start_pdi), v=1)
+                    ho_zigzag_logger.debug(f"Setting pattern start to {self.convert_pdis_to_times(pattern_start_pdi)}")
                 else:
-                    self.log_message("Setting pattern start to", pattern_start_pdi, v=1)
+                    ho_zigzag_logger.debug(f"Setting pattern start to {pattern_start_pdi}")
 
                 # Essentially reset the algorithm
                 latest_pbos_pdi = None
@@ -563,15 +559,14 @@ class Algo:
             # below the CHOCH.
             elif breaking_sentiment == "CHOCH_CLOSE":
                 if constants.logs_format == "time":
-                    self.log_message("Candle at index",
-                                     self.convert_pdis_to_times(breaking_pdi), "broke the last CHOCH #", self.convert_pdis_to_times(latest_choch_pdi),
-                                     "with its close price", v=2)
-                    self.log_message("CHOCH #", self.convert_pdis_to_times(self.h_o_indices[-2]), "break at",
-                                     self.convert_pdis_to_times(breaking_pdi), v=1)
+                    ho_zigzag_logger.debug(
+                        f"Candle at index {self.convert_pdis_to_times(breaking_pdi)} broke the last CHOCH # "
+                        f"{self.convert_pdis_to_times(latest_choch_pdi)} with its close price")
+                    ho_zigzag_logger.debug(
+                        f"CHOCH # {self.convert_pdis_to_times(self.h_o_indices[-2])} break at {self.convert_pdis_to_times(breaking_pdi)}")
                 else:
-                    self.log_message("Candle at index",
-                                     breaking_pdi, "broke the last CHOCH #", latest_choch_pdi, "with its close price", v=2)
-                    self.log_message("CHOCH #", self.h_o_indices[-2], "break at", breaking_pdi, v=1)
+                    ho_zigzag_logger.debug(f"Candle at index {breaking_pdi} broke the last CHOCH # {latest_choch_pdi} with its close price")
+                    ho_zigzag_logger.debug(f"CHOCH # {self.h_o_indices[-2]} break at {breaking_pdi}")
 
                 trend_type = "ascending" if trend_type == "descending" else "descending"
 
@@ -582,9 +577,9 @@ class Algo:
 
                 pattern_start_pdi = pivots_of_type_before_closing_candle.iloc[-1].pdi
                 if constants.logs_format == "time":
-                    self.log_message("Setting pattern start to", self.convert_pdis_to_times(pattern_start_pdi), v=1)
+                    ho_zigzag_logger.debug(f"Setting pattern start to {self.convert_pdis_to_times(pattern_start_pdi)}")
                 else:
-                    self.log_message("Setting pattern start to", pattern_start_pdi, v=1)
+                    ho_zigzag_logger.debug(f"Setting pattern start to {pattern_start_pdi}")
 
                 # A segment is added to the list of segments here. Each segment starts at the pivot before the low that was just broken by a candle
                 # closing below it. The segment ends at the CHOCH_CLOSE event, at the candle that closed above the high.
@@ -609,10 +604,7 @@ class Algo:
 
             # If no candles have broken the PBOS even with a shadow, break the loop
             else:
-                if constants.logs_format == "time":
-                    self.log_message("No more candles found. Breaking...", v=1)
-                else:
-                    self.log_message("No more candles found. Breaking...", v=1)
+                ho_zigzag_logger.debug("No more candles found. Breaking...")
                 break
 
         # return self.h_o_indices
@@ -672,7 +664,7 @@ def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
     truncated_htf_pair_df: pd.DataFrame = htf_pair_df.iloc[htf_starting_index:].reset_index()
 
     # Instantiate the Algo object so the functions can be used.
-    htf_algo = Algo(truncated_htf_pair_df, "HTF Data", allowed_verbosity=0)
+    htf_algo = Algo(truncated_htf_pair_df, "HTF Data")
     htf_algo.init_zigzag()
     first_zigzag_pivot_pdi: int = htf_algo.zigzag_df.iloc[0].pdi
     htf_algo.calc_h_o_zigzag(first_zigzag_pivot_pdi)

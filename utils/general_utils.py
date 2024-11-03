@@ -22,21 +22,6 @@ def load_higher_tf_data(pair_name: str = "BTCUSDT", timeframe: str = "4h") -> pd
     return pair_df
 
 
-def reset_logs():
-    open("logs.txt", "w")
-
-
-def log_message(*messages, v: int = 3, av=constants.allowed_verbosity) -> None:
-    if v <= av:
-        print(messages)
-        with open("./logs/logs.txt", "a") as fs:
-            for message in messages:
-                fs.write(str(message))
-                fs.write(" ")
-
-            fs.write("\n")
-
-
 class PlottingTool:
     def __init__(self, x_axis_type='index', width=800, height=600):
         self.fig = go.Figure()

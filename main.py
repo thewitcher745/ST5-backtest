@@ -11,7 +11,8 @@ pair_count = len(pair_list)
 for pair_counter, pair_name in enumerate(pair_list, start=1):
     # Set the pair_name in the configuration singleton and the logger
     Config.set_pair_name(pair_name)
-    LoggerSingleton("positions").update_pair_name(pair_name)
+    LoggerSingleton.update_pair_name("positions", pair_name)
+    LoggerSingleton.update_pair_name("ho_zigzag", pair_name)
 
     print(f"Processing pair {pair_counter}/{pair_count}:", pair_name)
 

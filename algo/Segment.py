@@ -30,7 +30,7 @@ class Segment:
         global positions_logger
 
         if positions_logger is None:
-            positions_logger = LoggerSingleton("positions").get_logger()
+            positions_logger = LoggerSingleton.get_logger("positions")
 
         self.end_pdi = end_pdi
         self.start_pdi = start_pdi
