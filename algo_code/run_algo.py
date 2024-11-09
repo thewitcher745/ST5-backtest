@@ -3,7 +3,7 @@ import pandas as pd
 from openpyxl import load_workbook
 
 import utils.general_utils as gu
-from algo.algo import Algo, create_filtered_pair_df_with_corrected_starting_point
+from algo_code.algo import Algo, create_filtered_pair_df_with_corrected_starting_point
 
 
 def run_algo(pair_name: str, timeframe: str):
@@ -15,7 +15,7 @@ def run_algo(pair_name: str, timeframe: str):
     original_pair_df: pd.DataFrame = gu.load_local_data(pair_name=pair_name, timeframe=timeframe)
 
     # --------------------------------------------------------
-    # Set up the pair data dataframe for the algo
+    # Set up the pair data dataframe for the algo_code
     if testing_length > 0:
         pair_df: pd.DataFrame = original_pair_df.iloc[start_index:start_index + testing_length].reset_index(drop=True)
     else:
@@ -43,7 +43,7 @@ def run_algo(pair_name: str, timeframe: str):
     algo.calc_h_o_zigzag(h_o_starting_point)
 
     # --------------------------------------------------------
-    # Use the segments from the algo object to calculate position entries and exits
+    # Use the segments from the algo_code object to calculate position entries and exits
 
     print("Processing segments...")
     # Initialize the progress bar

@@ -1,6 +1,6 @@
 import os
 
-from algo.run_algo import run_algo
+from algo_code.run_algo import run_algo
 from utils.config import Config
 from utils.logger import LoggerSingleton
 

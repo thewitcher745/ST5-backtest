@@ -1,7 +1,7 @@
 from typing import Union, Literal
 import pandas as pd
 
-from algo import position_prices_setup as setup
+import algo_code.position_prices_setup as setup
 import constants
 
 

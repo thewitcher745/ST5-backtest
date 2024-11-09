@@ -69,6 +69,7 @@ def all_on_30(position):
             position.entry_price - 30 * position.edicl,
         ]
 
+
 def all_on_60(position):
     if position.type == "long":
         position.stoploss = position.entry_price - constants.stoploss_coeff * position.edicl

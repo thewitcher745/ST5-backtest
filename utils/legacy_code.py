@@ -1,4 +1,4 @@
-from algo.datatypes import *
+from algo_code.datatypes import *
 
 
 # def zigzag_deprecated(input_df: pd.DataFrame) -> pd.DataFrame:

@@ -612,7 +612,7 @@ class Algo:
 
     def convert_pdis_to_times(self, pdis: Union[int, list[int]]) -> Union[pd.Timestamp, list[pd.Timestamp], None]:
         """
-        Convert a list (or a single) of PDIs to their corresponding times using algo.pair_df.
+        Convert a list (or a single) of PDIs to their corresponding times using algo_code.pair_df.
 
         Args:
             pdis (list[int]): List of PDIs to convert.
@@ -644,7 +644,7 @@ def find_last_htf_ho_pivot(htf_pair_df: pd.DataFrame,
                            ltf_start_time: pd.Timestamp,
                            backtrack_window: int = constants.starting_point_backtrack_window) -> tuple[pd.Timestamp, str]:
     """
-    This function returns a starting point for the algorithm. It uses the algo object (kind of recursively) with a higher order pair_df and applies
+    This function returns a starting point for the algorithm. It uses the algo_code object (kind of recursively) with a higher order pair_df and applies
     a higher order zigzag operator on it. The last point of the higher order zigzag before the original LTF data's starting point is set as the
     starting timestamp for LTF data, and the data is reshaped to account for it
 

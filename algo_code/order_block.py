@@ -1,9 +1,9 @@
 from typing import Union
 import pandas as pd
 
-from algo.datatypes import Candle
+from algo_code.datatypes import Candle
 import utils.general_utils as gen_utils
-from algo.position import Position
+from algo_code.position import Position
 
 
 class OrderBlock:

@@ -2,7 +2,7 @@ from logging import Logger
 import pandas as pd
 
 import constants
-from algo.order_block import OrderBlock
+from algo_code.order_block import OrderBlock
 from utils.logger import LoggerSingleton
 
 # noinspection PyTypeChecker
