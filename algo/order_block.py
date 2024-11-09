@@ -3,7 +3,7 @@ import pandas as pd
 
 from algo.datatypes import Candle
 import utils.general_utils as gen_utils
-from algo.Position import Position
+from algo.position import Position
 
 
 class OrderBlock:

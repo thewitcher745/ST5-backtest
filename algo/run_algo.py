@@ -3,7 +3,7 @@ import pandas as pd
 from openpyxl import load_workbook
 
 import utils.general_utils as gu
-from algo.Algo import Algo, create_filtered_pair_df_with_corrected_starting_point
+from algo.algo import Algo, create_filtered_pair_df_with_corrected_starting_point
 
 
 def run_algo(pair_name: str, timeframe: str):

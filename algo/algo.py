@@ -4,7 +4,7 @@ import pandas as pd
 
 import constants
 from algo.datatypes import *
-from algo.Segment import Segment
+from algo.segment import Segment
 from utils.logger import LoggerSingleton
 
 # noinspection PyTypeChecker
@@ -215,7 +215,8 @@ class Algo:
                     breaking_candle_pdi = row.pdi
 
                 if constants.logs_format == "time":
-                    ho_zigzag_logger.debug(f"LPL #{self.convert_pdis_to_times(breaking_pdi)} broken at {self.convert_pdis_to_times(breaking_candle_pdi)}")
+                    ho_zigzag_logger.debug(
+                        f"LPL #{self.convert_pdis_to_times(breaking_pdi)} broken at {self.convert_pdis_to_times(breaking_candle_pdi)}")
                 else:
                     ho_zigzag_logger.debug(f"LPL #{breaking_pdi} broken at {breaking_candle_pdi}")
 
