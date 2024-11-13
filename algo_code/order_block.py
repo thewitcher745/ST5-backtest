@@ -8,6 +8,7 @@ from algo_code.position import Position
 
 class OrderBlock:
     def __init__(self, base_candle: Union[pd.Series, Candle], icl: float, ob_type: str):
+
         if isinstance(base_candle, Candle):
             self.start_index = base_candle.pdi
         elif isinstance(base_candle, pd.Series):
@@ -42,6 +43,7 @@ class OrderBlock:
         self.has_fvg_condition = None
         self.has_stop_break_condition = None
         self.has_been_replaced = False
+        self.fvg_fail_message = ""
 
         # The number of times the algorithm has tried to find a replacement for this order block
         self.times_moved = 0
@@ -122,6 +124,7 @@ class OrderBlock:
         # its high and low.
 
         if self.price_exit_index is None:
+            self.fvg_fail_message = "No exit candle.."
             self.has_fvg_condition = False
 
         aggregated_candle_after_exit: list = [self.condition_check_window.loc[self.price_exit_index + 1:].low.min(),
@@ -147,6 +150,7 @@ class OrderBlock:
 
         # If the before and after aggregated candle overlap, no FVG exists
         if find_overlap(aggregated_candle_before_exit, aggregated_candle_after_exit) is not None:
+            self.fvg_fail_message = "The before and after candles overlap. No FVG."
             self.has_fvg_condition = False
 
         else:
@@ -169,10 +173,12 @@ class OrderBlock:
 
                 # If there isn't exact alignment, the check doesn't pass.
                 else:
+                    self.fvg_fail_message = "FVG doesn't align with OB."
                     self.has_fvg_condition = False
 
             # If the exit candle's body doesn't overlap with the gap, there is no FVG.
             else:
+                self.fvg_fail_message = "Exit candle doesn't intersect with the FVG."
                 self.has_fvg_condition = False
 
     def check_stop_break_condition(self):

@@ -171,7 +171,7 @@ class Segment:
                 ob.check_stop_break_condition()
 
                 positions_logger.debug(f"\t\t\tReentry check status: {ob.has_reentry_condition}")
-                positions_logger.debug(f"\t\t\tFVG check status: {ob.has_fvg_condition}")
+                positions_logger.debug(f"\t\t\tFVG check status: {ob.has_fvg_condition} ({ob.fvg_fail_message})")
                 positions_logger.debug(f"\t\t\tStop break check status: {ob.has_stop_break_condition}")
                 if ob.has_reentry_condition and ob.has_fvg_condition and ob.has_stop_break_condition:
                     positions_logger.debug(f"\t\t\tAll checks passed, adding OB with ID {ob.id}")
