@@ -3,8 +3,8 @@ from typing import Optional
 import pandas as pd
 
 import constants
-from algo.datatypes import *
-from algo.segment import Segment
+from algo_code.datatypes import *
+from algo_code.segment import Segment
 from utils.logger import LoggerSingleton
 
 # noinspection PyTypeChecker
