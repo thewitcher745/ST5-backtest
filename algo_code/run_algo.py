@@ -2,6 +2,7 @@ from tqdm import tqdm
 import pandas as pd
 from openpyxl import load_workbook
 
+import constants
 import utils.general_utils as gu
 from algo_code.algo import Algo, create_filtered_pair_df_with_corrected_starting_point
 
@@ -138,6 +139,7 @@ def run_algo(pair_name: str, timeframe: str):
                     # 'Has been replaced?': position.parent_ob.has_been_replaced,
                     'Ranking within segment': position.parent_ob.ranking_within_segment,
                     'Quantity': position.qty,
+                    'Capital used': constants.used_capital,
                     'Entry time': algo.convert_pdis_to_times(position.entry_pdi),
                     'Exit time': algo.convert_pdis_to_times(position.exit_pdi),
                     'Target hit times': [time.strftime("%Y-%m-%d %X") for time in target_hit_times_list],
