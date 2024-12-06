@@ -1,3 +1,7 @@
+from dotenv import dotenv_values
+
+timeframe = dotenv_values("./.env.params")["timeframe"]
+
 allowed_verbosity = 3
 starting_point_backtrack_window = 300
 

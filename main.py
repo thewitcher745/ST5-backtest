@@ -1,11 +1,12 @@
 import os
 
+import constants
 from algo_code.run_algo import run_algo
 from utils.config import Config
 from utils.logger import LoggerSingleton
 
 # Get the pair list from cached_data folder
-pair_list = [filename.split(".")[0] for filename in os.listdir("./cached_data/15m")]
+pair_list = [filename.split(".")[0] for filename in os.listdir(f"./cached_data/{constants.timeframe}")]
 pair_count = len(pair_list)
 
 for pair_counter, pair_name in enumerate(pair_list, start=1):
@@ -17,7 +18,7 @@ for pair_counter, pair_name in enumerate(pair_list, start=1):
     print(f"Processing pair {pair_counter}/{pair_count}:", pair_name)
 
     try:
-        run_algo(pair_name, "15m")
+        run_algo(pair_name, constants.timeframe)
 
     except Exception as e:
         print(f"Error processing {pair_name}: {e}")
