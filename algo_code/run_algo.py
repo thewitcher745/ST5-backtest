@@ -132,6 +132,7 @@ def run_algo(pair_name: str, timeframe: str):
 
                 position_data = {
                     'Pair name': pair_name,
+                    "Capital used": 1000,
                     'Position ID': position.parent_ob.id,
                     'Segment ID': segment.id,
                     'Status': position.status,
